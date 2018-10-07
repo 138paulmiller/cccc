@@ -67,8 +67,8 @@ Forward is +x, Backward is -x
 #include <stdlib.h>
 #include <string.h> 
 
-#define BF           0
-#define DEBUG        1
+#define BF           1
+#define DEBUG        0
 
 #define ERR(msg,...) {printf("ERR:"msg,__VA_ARGS__); exit(0);}
 
@@ -131,7 +131,25 @@ Forward is +x, Backward is -x
 #define SET_T       CASE('t' ,    state->cursor.c = T;    )          
 
 
-
+#define BF_CODES INPUT OUTPUT INC DEC BEG_LOOP END_LOOP FORWARD BACKWARD
+#if BF
+    #define CASES   BF_CODES
+#else
+    #define CASES BF_CODES     \
+            ROT_CW     \
+            ROT_CCW     \
+            PUSH_CUR    \
+            POP_CUR     \
+            PEEK_CUR    \
+            DRAW        \
+            CLEAR       \
+            SET_X       \
+            SET_Y       \
+            SET_R       \
+            SET_G       \
+            SET_B       \
+            SET_T       
+#endif
 
 
 #define new(type, ptr, len)      \
@@ -396,7 +414,6 @@ byte parse(State * state)
     int        bracket_index = 0;
     Code *    code;
     int        sym;
-    byte    valid_code;
     int        line = 0,col = 0;    //
     static Cursor * cursor;
     cursor = &state->cursor;
@@ -413,81 +430,54 @@ byte parse(State * state)
         }
         col++;
         code = &state->code[state->pc];
+
+        switch(sym)
+        {
+            BEG_LOOP
+            {
+                bracket_stack[bracket_index++] = state->pc;
+                break;
+            }
+            END_LOOP
+            {
+
+                if (bracket_index <= 0)
+                {
+                    free(bracket_stack);
+                    ERR("Expecting Opening Bracket for bracket at line:%d, col:%d ", line, col);
+                }
+                int open_brack_index = bracket_stack[--bracket_index];
+                code->jump = open_brack_index;
+                //jump to next statement after closing bracket,
+                state->code[open_brack_index].jump = state->pc + 1;
+                break;
+            }
+
+
+        }
         switch (sym)
         {
-#if !(BF)
-            ROT_CW   
-            ROT_CCW  
-            PUSH_CUR 
-            POP_CUR  
-            PEEK_CUR 
-            DRAW     
-            CLEAR    
-            SET_X    
-            SET_Y    
-            SET_R    
-            SET_G    
-            SET_B    
-            SET_T    
-#endif
-            INPUT    
-            OUTPUT   
-            INC      
-            DEC      
-            FORWARD  
-            BACKWARD 
-        {
-            valid_code = 1;
-            break;
-        }
-        //LOOP
-        BEG_LOOP
-        {
-            bracket_stack[bracket_index++] = state->pc;
-            valid_code = 1;
-            break;
-        }
-        END_LOOP
-        {
-
-            if (bracket_index <= 0)
-            {
-                free(bracket_stack);
-                ERR("Expecting Opening Bracket for bracket at line:%d, col:%d ", line, col);
-                
-            }
-            int open_brack_index = bracket_stack[--bracket_index];
-            code->jump = open_brack_index;
-            //jump to next statement after closing bracket,
-            state->code[open_brack_index].jump = state->pc + 1;
-            valid_code = 1;
-            break;
-        }
-        case '\n':
-            //intentional fall-through because im mad at you :(
-            line++;
-        default:
-            valid_code = 0;
-            //skips any nonrecognized characters
-            break;
-        }//EndSwitch
-
-        if (valid_code)
-        {
+            case '\n':
+                //intentional fall-through because im mad at you :(
+                line++;
+                break;
+            CASES
+            ;{
             code->sym = sym;
             code->line = line;
             code->col = col;
             state->pc++;
-        }
-    }//End while
 
+            }
+        }//EndSwitch
+
+    }//End while
     if (bracket_index > 0)
     {
 
         free(bracket_stack);
         ERR("\nThe leading %d brackets are not closed", bracket_index);
     }
-
     //reset pc
     state->pc = 0;
     free(bracket_stack);
@@ -507,32 +497,8 @@ byte eval(State * state)
     code = &state->code[state->pc];
     if(!code->sym)return 0; //NOOP
     state->pc++;
-    switch (code->sym){
-    INPUT
-    OUTPUT
-    INC
-    DEC
-    BEG_LOOP
-    END_LOOP
-    FORWARD
-    BACKWARD
-#if !(BF)
-    ROT_CW
-    ROT_CCW
-    PUSH_CUR
-    POP_CUR
-    PEEK_CUR
-    DRAW
-    CLEAR
-    SET_X
-    SET_Y
-    SET_R
-    SET_G
-    SET_B
-    SET_T 
-#endif
-    }
-    return 1;            //should not run Coorupted Code
+    switch (code->sym){CASES}
+    return 0;            //should not run Coorupted Code
 }
 
 //show local memory for values
