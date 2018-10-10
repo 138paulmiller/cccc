@@ -1,8 +1,10 @@
 
+
 //"PLUGINS" Compile time determined to confgure progam.
-#define BF           1
+#define BF           0
 #define DEBUG        0
-#define OPENGL       0    /*set to 0 by default to prevent opengl build*/
+#define OPENGL       1    /*set to 0 by default to prevent opengl build*/
+#define TEST_OPENGL 0
 
 //265*265 = 65536
 #define WIDTH           256
@@ -10,8 +12,8 @@
 #define CODE_LENGTH     65536/2
 #define BRACKET_DEPTH           2048
 #define CURSOR_DEPTH            2048
-#define FLAGS           DRAW_PPM /*| DRAW_OPENGL*/
-
+#define FLAGS           DRAW_OPENGL
+// DRAW_PPM | 
 //flags used to determine how data is output on #
 #define DRAW_PPM         0x01    /*0000 0001*/
 #define DRAW_OPENGL      0x02    /*0000 0010*/
@@ -91,18 +93,21 @@ Forward is +x, Backward is -x
 #include <stdlib.h>
 #include <string.h> 
 
+
+
 #if OPENGL
     #include "gfx.h"
-    #define  OPENGL_INIT        gl_init(state->width, state->height); shader_init(); vao_init()
-    #define  OPENGL_DESTROY     gl_destroy(); shader_destroy();                     vao_destroy()
-    #define  OPENGL_RENDER      load_texture(&canvas[0].rgbt[0], state->width,state->height); vao_render()
+    #define  OPENGL_INIT        gl_init(state->width+10, state->height+10); shader_init(); vao_init();
+    #define  OPENGL_DESTROY      vao_destroy(); shader_destroy(); gl_destroy();                   
+    #define  OPENGL_RENDER        gl_clear(); glUseProgram(m_program);  load_texture(&(canvas[0].rgbt[0]), state->width, state->height); vao_render();
+//gl_update(); load_texture(&canvas[0].rgbt[0], state->width,state->height); vao_render()
 #else
-enum{OPENGL_INIT, OPENGL_DESTROY, OPENGL_RENDER};
+enum{OPENGL_INIT, OPENGL_RENDER, OPENGL_DESTROY};
 #endif 
 
 
-#define CLEANUP       OPENGL_DESTROY;     free(canvas); del_state(state)
-#define ERR(msg,...) {printf("ERR:"msg,__VA_ARGS__); CLEANUP; exit(0);}
+#define CLEANUP             OPENGL_DESTROY;     free(canvas); del_state(state); 
+#define ERR(...) {printf(__VA_ARGS__); CLEANUP; exit(0);}
 
 
 
@@ -132,7 +137,11 @@ typedef struct
 
 typedef struct
 {
-    union   {int32 value;byte rgbt[4];};
+ #if BF
+    int32 value;
+#else
+    byte rgbt[4];
+#endif
 }Cell;
 
 typedef struct 
@@ -198,7 +207,7 @@ int canvas_len;
 #define SET_B       CASE('b' ,   CURSOR.c = B;    )          
 #define SET_T       CASE('t' ,   CURSOR.c = T;    )          
 
-
+//USE SYMS FOR CAHNNELS to allow comments!!!!!
 
 #define BF_CODES INPUT OUTPUT INC DEC BEG_LOOP END_LOOP FORWARD BACKWARD
 #if BF
@@ -249,13 +258,13 @@ void del_state(State * state)
 {
     free(state->code);;
 }
-void new_state(State * state, FILE * file, int height, int width, int code_len)
+void new_state(State * state, FILE * file)
 {
     
     state->file = file;
-    state->code_len = code_len;
-    state->width = width;
-    state->height = height;
+    state->code_len = CODE_LENGTH;
+    state->width = WIDTH;
+    state->height = HEIGHT;
     state->flags = FLAGS;
     state->sp = 0;
 
@@ -266,7 +275,6 @@ void new_state(State * state, FILE * file, int height, int width, int code_len)
     CURSOR.x  = CURSOR.y  = CURSOR.dy = CURSOR.c =0;
     CURSOR.dx = 1; 
 #endif
-    OPENGL_INIT;    
 }
 
 
@@ -355,6 +363,7 @@ void draw()
     }
     if(FLAG(DRAW_OPENGL ))
     {
+        puts("asd");
         OPENGL_RENDER;
     }
 }
@@ -445,6 +454,10 @@ byte eval()
 
 int main(int argc, char ** argv)
 {
+#if TEST_OPENGL
+    return test_opengl();
+
+#endif
 
     //init state syntax
     //-f value
@@ -453,7 +466,7 @@ int main(int argc, char ** argv)
     state = (State*)malloc(sizeof(State));
     new_state
     (
-        state,stdin,WIDTH,HEIGHT,CODE_LENGTH
+        state,stdin
     ); 
     int i;
     for (i = 1; i < argc; ++i)
@@ -465,30 +478,34 @@ int main(int argc, char ** argv)
     //init new canvas
     new(Cell, canvas, canvas_len);
 
-    cursors[CURSOR_DEPTH];  //TODO cursor stack
+    cursors[CURSOR_DEPTH];  //TODO count cursors to dynamically allocate only as much as needed
 
        
     byte status = 1;
-    
-    if (parse())
-        while (status)
+
+    OPENGL_INIT;        
+
+        if (parse())
         {
-            status = eval();
-            ++state->ip;
 
+            while (status && gl_update())
+            {
+                status = eval();
+                ++state->ip;
+
+                void debug_values();
 #if DEBUG
-            void debug_values();
-            debug_values();
-#endif
+                debug_values();
+#endif 
+            }
+    
         }
-
     //calls destroy and exits
     CLEANUP;
-    
+
 }
 
 
-#if DEBUG
 ///////////////////////////////////////////////// DEBUG /////////////////////////////////////////////////
 //show local memory for values
 void debug_values()
@@ -568,7 +585,4 @@ void debug_values()
     getchar();
 }
 
-
-
-#endif
 
