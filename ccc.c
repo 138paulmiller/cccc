@@ -272,7 +272,8 @@ void new_state(State * state, FILE * file)
     new(Code, state->code, state->code_len);
     CURSOR.c = 0;
 #if !(BF)
-    CURSOR.x  = CURSOR.y  = CURSOR.dy = CURSOR.c =0;
+    CURSOR.y  = HEIGHT;
+    CURSOR.x  = CURSOR.dy = CURSOR.c =0;
     CURSOR.dx = 1; 
 #endif
 }
@@ -298,7 +299,7 @@ byte move_forward()
     ++CURSOR.c;        
 #else
     CURSOR.x += CURSOR.dx;
-    CURSOR.y += CURSOR.dy;
+    CURSOR.y -= CURSOR.dy;
 #endif
     check_bound();
     return 1;
@@ -311,7 +312,7 @@ byte move_backward()
     --CURSOR.c;
 #else       
     CURSOR.x -= CURSOR.dx;
-    CURSOR.y -= CURSOR.dy;
+    CURSOR.y += CURSOR.dy;
 #endif
     check_bound();
     return 1;
@@ -327,7 +328,7 @@ void rot_cw()
     }
     else
     {
-        CURSOR.dx = -1 * CURSOR.dy;
+        CURSOR.dx = CURSOR.dy*-1 ;
         CURSOR.dy = 0;
     }
 }

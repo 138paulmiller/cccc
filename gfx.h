@@ -7,12 +7,12 @@ int m_texture, m_vert_shader, m_frag_shader, m_program;
 int m_vao, m_vbo;
 
 static float verts[12] = {
-    0.0, 0.0,
-    0.0, 1.0,
+    -1.0, -1.0,
+    -1.0, 1.0,
     1.0, 1.0,
 
-    0.0, 0.0,
-    1.0, 0.0,
+    -1.0, -1.0,
+    1.0, -1.0,
     1.0, 1.0,
 };
 
@@ -83,11 +83,12 @@ void shader_init()
 {
     const char * vs = 
     "#version 130\n"
-    "in vec2 pos;\n"
-    "out vec2 uv;\n"
-    "void main(){\n"
-        "uv=pos;\n"
-        "gl_Position  =vec4(2*uv-1,1,1);\n"
+    "in vec2 pos;"
+    "out vec2 uv;"
+    "void main(){"
+        "uv=pos*0.5+0.5;"
+        "gl_Position  =vec4(pos,1,1);\n"
+
     "}";
 
 
@@ -98,7 +99,7 @@ void shader_init()
     "out vec4 color;"
     "void main(){\n"
         "color = texture(sampler,uv);\n"
-        // /"color =vec4(uv+1.0,0,1);\n"
+//        "color = vec4(uv,0,1);\n"
     "}";
 
     m_program = glCreateProgram();
