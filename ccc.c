@@ -1,26 +1,3 @@
-
-
-//"PLUGINS" Compile time determined to confgure progam.
-#define BF           1
-#define DEBUG        0
-#define OPENGL       0    /*set to 0 by default to prevent opengl build. remove*/
-#define TEST_OPENGL 0
-
-//265*265 = 65536
-#define WIDTH           256
-#define HEIGHT          256
-#define CODE_LENGTH     65536/2
-#define BRACKET_DEPTH           2048
-#define CURSOR_DEPTH            2048
-#define FLAGS           DRAW_OPENGL
-// DRAW_PPM | 
-//flags used to determine how data is output on #
-#define DRAW_PPM         0x01    /*0000 0001*/
-#define DRAW_OPENGL      0x02    /*0000 0010*/
-
-
-
-
 /*
 # ccc.c
 Canvas, cursor, cells in C, cool?
@@ -86,13 +63,33 @@ Forward is +x, Backward is -x
 //Implementation of BF to prove turing completeness by showing BF is subset of LAng, should be obvious though
 //BF uses only values tape
 
-
+//Modify Mandlebrot to draw PPM
 
 #include <stdio.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h> 
 #include "gfx.h"
+
+//"PLUGINS" Compile time determined to confgure progam.
+#define BF           0
+#define DEBUG        0
+#define OPENGL       1    /*set to 0 by default to prevent opengl build. remove*/
+#define TEST_OPENGL 0
+
+//265*265 = 65536
+#define WIDTH           256
+#define HEIGHT          256
+#define CODE_LENGTH     65536/2
+#define BRACKET_DEPTH           2048
+#define CURSOR_DEPTH            2048
+#define FLAGS           DRAW_OPENGL
+// DRAW_PPM | 
+//flags used to determine how data is output on #
+#define DRAW_PPM         0x01    /*0000 0001*/
+#define DRAW_OPENGL      0x02    /*0000 0010*/
+
+
 
 
 //todo, 
@@ -179,18 +176,18 @@ int canvas_len;
 
 #define COMMENT     ';'        
 #define INPUT       CASE(',' ,   CELL = getchar()              )        
-#define OUTPUT      CASE('.' ,    putchar(CELL)                )        
-#define INC         CASE('+' ,   CELL++;                        )        
-#define DEC         CASE('-' ,   CELL--;                        )        
+#define OUTPUT      CASE('.' ,   draw(); putchar(CELL)                )        
+#define INC         CASE('+' ,   CELL+=CODE.arg;                        )        
+#define DEC         CASE('-' ,   CELL-=CODE.arg;                        )        
 #define BEG_LOOP    CASE('[' ,   if(!CELL)state->ip = CODE.arg)        
 #define END_LOOP    CASE(']' ,   if(CELL)state->ip = CODE.arg )        
-#define FORWARD     CASE('>' ,   move_forward()           )        
-#define BACKWARD    CASE('<' ,   move_backward()     )        
+#define FORWARD     CASE('>' ,   move_forward(CODE.arg)           )        
+#define BACKWARD    CASE('<' ,   move_backward(CODE.arg)     )        
 #define ROT_CW      CASE('/' ,   rot_cw()    )        
 #define ROT_CCW     CASE('\\',   rot_ccw()     )        
 #define PUSH_CUR    CASE('{' ,   if(++state->sp > state->cursor_depth) ERR("Cursor Stack Overflow",0)      )        
 #define POP_CUR     CASE('}' ,   if(--state->sp < 0) ERR("Cursor Stack Underflow",0)     )        
-#define DRAW        CASE('#' ,   draw(state);    )        
+#define DRAW        CASE('#' ,   draw();    )        
 #define CLEAR       CASE('@' ,   memset(canvas, 0, sizeof(Cell) * canvas_len);       )        
 #define SET_X       CASE('x' ,   CURSOR.x = CELL;    )        
 #define SET_Y       CASE('y' ,   CURSOR.y = CELL;    )        
@@ -282,26 +279,26 @@ byte check_bound()
     return 1;
 }
 
-byte move_forward()
+byte move_forward(int amt)
 {
 #if BF
-    ++CURSOR.c;        
+    CURSOR.c+=amt;        
 #else
-    CURSOR.x += CURSOR.dx;
-    CURSOR.y -= CURSOR.dy;
+    CURSOR.x += CURSOR.dx*amt;
+    CURSOR.y -= CURSOR.dy*amt;
 #endif
     check_bound();
     return 1;
 }
 
 
-byte move_backward()
+byte move_backward(int amt)
 {
 #if BF
-    --CURSOR.c;
+    CURSOR.c-=amt;
 #else       
-    CURSOR.x -= CURSOR.dx;
-    CURSOR.y += CURSOR.dy;
+    CURSOR.x -= CURSOR.dx*amt;
+    CURSOR.y += CURSOR.dy*amt;
 #endif
     check_bound();
     return 1;
@@ -371,26 +368,23 @@ byte parse()
     if (!state) return 0;
     //index of the end of bracket stack (top is at bracket_index-1 )
     int        bracket_index = 0;
-    int        sym;
+    int        sym,c;
     int        line = 0,col = 0;    //
 
 
     state->ip=0;
+    _loop:
     while ((sym = fgetc(state->file)) != -1)
     {
         if (state->ip > state->code_len)
         {
             ERR("Not enough Code Memory! Please shorten source code Max: %d", state->code_len);
         }
-        while(sym == '\n')
-        { 
-            col=0;
-            line++; 
-            sym = fgetc(state->file);
-        }
+        
 
         col++;
         code = &CODE;
+     //special cases
         switch(sym)
         {
             BEG_LOOP
@@ -414,24 +408,25 @@ byte parse()
             //eat same symbol, increment arg
             //do for push, rots as well
             INC
-            DEC
+            DEC FORWARD BACKWARD
             {       
-               // while(sym == fgetc(state->file))
-                    code->arg++;//increment while same sym!, handle newline!!
-               // ungetc(sym,state->file);//roll back to reeval
-            
+               do code->arg++;while(sym == (c=fgetc(state->file)));
+                    //increment while same sym!, handle newline!!
+               ungetc(c,state->file);//roll back to reeval
             }
         }
         switch (sym)
         {
-            CASES;
+            CASES
             {
-
             code->sym = sym;
             code->line = line;
             code->col = col;
             state->ip++;
             }
+         
+            //rmeove col and lines !!!
+            case '\n': col=0; line++;    
         }//EndSwitch
 
     }//End while
