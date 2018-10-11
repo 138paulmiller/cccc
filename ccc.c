@@ -1,9 +1,9 @@
 
 
 //"PLUGINS" Compile time determined to confgure progam.
-#define BF           0
+#define BF           1
 #define DEBUG        0
-#define OPENGL       1    /*set to 0 by default to prevent opengl build*/
+#define OPENGL       0    /*set to 0 by default to prevent opengl build. remove*/
 #define TEST_OPENGL 0
 
 //265*265 = 65536
@@ -92,21 +92,21 @@ Forward is +x, Backward is -x
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h> 
+#include "gfx.h"
 
 
-
+//todo, 
 #if OPENGL
-    #include "gfx.h"
-    #define  OPENGL_INIT        gl_init(state->width+10, state->height+10); shader_init(); vao_init();
-    #define  OPENGL_DESTROY      vao_destroy(); shader_destroy(); gl_destroy();                   
+    #define  OPENGL_INIT            gl_init(state->width, state->height); shader_init(); vao_init();
+    #define  OPENGL_DESTROY         vao_destroy(); shader_destroy(); gl_destroy();                   
     #define  OPENGL_RENDER        gl_clear(); glUseProgram(m_program);  load_texture(&(canvas[0].rgbt[0]), state->width, state->height); vao_render();
 //gl_update(); load_texture(&canvas[0].rgbt[0], state->width,state->height); vao_render()
 #else
-enum{OPENGL_INIT, OPENGL_RENDER, OPENGL_DESTROY};
+    enum{ OPENGL_INIT, OPENGL_RENDER, OPENGL_DESTROY};
 #endif 
 
 
-#define CLEANUP             OPENGL_DESTROY;     free(canvas); del_state(state); 
+#define CLEANUP             OPENGL_DESTROY;    free(canvas);     free(state->code);free(state); 
 #define ERR(...) {printf(__VA_ARGS__); CLEANUP; exit(0);}
 
 
@@ -124,7 +124,7 @@ typedef struct
 {
     byte sym;
     //if [ or ], jump is index to the matching brace
-    int jump;
+    int arg;
     int line, col;
 }Code;
 
@@ -137,11 +137,7 @@ typedef struct
 
 typedef struct
 {
- #if BF
-    int32 value;
-#else
     byte rgbt[4];
-#endif
 }Cell;
 
 typedef struct 
@@ -169,33 +165,29 @@ int canvas_len;
 
 
 #define CURSOR cursors[state->sp]
-#define XY(x,y) state->width*x + y
 
 #if BF
 #define INDEX CURSOR.c
 #else
-#define INDEX XY(CURSOR.y,CURSOR.x)
+#define INDEX state->height*CURSOR.y + CURSOR.x
 #endif
 
-#if BF
-#define CELL           canvas[INDEX].value
-#else
-#define CELL           canvas[INDEX].rgbt[CURSOR.c]
-#endif
+#define CELL        canvas[INDEX].rgbt[CURSOR.c]
+#define CODE        state->code[state->ip]
 
-#define CASE(c,stmt) case c : if(!PARSE){stmt return 1;}
+#define CASE(c,stmt) case c : if(!PARSE){stmt; return 1;}
 
 #define COMMENT     ';'        
-#define INPUT       CASE(',' ,   CELL = getchar();              )        
-#define OUTPUT      CASE('.' ,    putchar(CELL);                )        
-#define INC         CASE('+' ,   ++CELL;                        )        
-#define DEC         CASE('-' ,   --CELL;                        )        
-#define BEG_LOOP    CASE('[' ,   !CELL?state->ip = state->code[state->ip].jump:0;)        
-#define END_LOOP    CASE(']' ,   CELL? state->ip = state->code[state->ip].jump:0; )        
-#define FORWARD     CASE('>' ,   move_forward(state);           )        
-#define BACKWARD    CASE('<' ,   move_backward(state);     )        
-#define ROT_CW      CASE('/' ,   rot_cw(state);    )        
-#define ROT_CCW     CASE('\\',   rot_ccw(state);     )        
+#define INPUT       CASE(',' ,   CELL = getchar()              )        
+#define OUTPUT      CASE('.' ,    putchar(CELL)                )        
+#define INC         CASE('+' ,   CELL++;                        )        
+#define DEC         CASE('-' ,   CELL--;                        )        
+#define BEG_LOOP    CASE('[' ,   if(!CELL)state->ip = CODE.arg)        
+#define END_LOOP    CASE(']' ,   if(CELL)state->ip = CODE.arg )        
+#define FORWARD     CASE('>' ,   move_forward()           )        
+#define BACKWARD    CASE('<' ,   move_backward()     )        
+#define ROT_CW      CASE('/' ,   rot_cw()    )        
+#define ROT_CCW     CASE('\\',   rot_ccw()     )        
 #define PUSH_CUR    CASE('{' ,   if(++state->sp > state->cursor_depth) ERR("Cursor Stack Overflow",0)      )        
 #define POP_CUR     CASE('}' ,   if(--state->sp < 0) ERR("Cursor Stack Underflow",0)     )        
 #define DRAW        CASE('#' ,   draw(state);    )        
@@ -229,7 +221,7 @@ int canvas_len;
 }                                
 
 
-void dump_cursor(const State * state)
+void dump_cursor()
 {
 #if BF
     printf("Cursor:%d\n", CURSOR.c);
@@ -242,7 +234,7 @@ void dump_cursor(const State * state)
 #endif
 }
 
-void dump(const State * state)
+void dump()
 {
     puts("Options");
     printf("\tcode_len      : %d\n", state->code_len);
@@ -254,13 +246,10 @@ void dump(const State * state)
 }
 
 
-void del_state(State * state)
+void new_state(FILE * file)
 {
-    free(state->code);;
-}
-void new_state(State * state, FILE * file)
-{
-    
+    state = (State*)malloc(sizeof(State));
+
     state->file = file;
     state->code_len = CODE_LENGTH;
     state->width = WIDTH;
@@ -393,8 +382,15 @@ byte parse()
         {
             ERR("Not enough Code Memory! Please shorten source code Max: %d", state->code_len);
         }
+        while(sym == '\n')
+        { 
+            col=0;
+            line++; 
+            sym = fgetc(state->file);
+        }
+
         col++;
-        code = &state->code[state->ip];
+        code = &CODE;
         switch(sym)
         {
             BEG_LOOP
@@ -410,17 +406,27 @@ byte parse()
                     ERR("Expecting Opening Bracket for bracket at line:%d, col:%d ", line, col);
                 }
                 int open_brack_index = bracket_stack[--bracket_index];
-                code->jump = open_brack_index;
+                code->arg = open_brack_index;
                 //jump to next statement after closing bracket,
-                state->code[open_brack_index].jump = state->ip ;
+                state->code[open_brack_index].arg = state->ip ;
                 break;
+            };
+            //eat same symbol, increment arg
+            //do for push, rots as well
+            INC
+            DEC
+            {       
+               // while(sym == fgetc(state->file))
+                    code->arg++;//increment while same sym!, handle newline!!
+               // ungetc(sym,state->file);//roll back to reeval
+            
             }
         }
         switch (sym)
         {
-            case '\n':line++;break;
             CASES;
             {
+
             code->sym = sym;
             code->line = line;
             code->col = col;
@@ -444,10 +450,10 @@ byte parse()
 #define PARSE 0
 byte eval()
 {
-    switch (state->code[state->ip].sym){
+    switch (CODE.sym){
         CASES
-        ;default: return 0; //done NOOP 
     }
+    return 0; //done NOOP
 }
 
 
@@ -464,11 +470,8 @@ int main(int argc, char ** argv)
     //-f value
     //file
     
-    state = (State*)malloc(sizeof(State));
     new_state
-    (
-        state,stdin
-    ); 
+    (stdin); 
     int i;
     for (i = 1; i < argc; ++i)
         if (strcmp(argv[i], "-"))   
@@ -479,7 +482,6 @@ int main(int argc, char ** argv)
     //init new canvas
     new(Cell, canvas, canvas_len);
 
-    cursors[CURSOR_DEPTH];  //TODO count cursors to dynamically allocate only as much as needed
 
        
     byte status = 1;
@@ -489,7 +491,12 @@ int main(int argc, char ** argv)
         if (parse())
         {
 
-            while (status && gl_update())
+            while (status 
+
+#if OPENGL
+                && gl_update()
+#endif
+                )
             {
                 status = eval();
                 ++state->ip;
@@ -516,8 +523,8 @@ void debug_values()
 
     int width = 10;
     static byte * rgb;
-    dump_cursor(state);
-    printf("\nCODE\t:%c ", state->code[state->ip].sym);
+    dump_cursor();
+    printf("\nCODE\t:%c ", CODE.sym);
     printf("\nPC\t%d\n", state->ip);
     printf("\nCHANNEL\t%d\n", CURSOR.c);
 
@@ -526,8 +533,8 @@ void debug_values()
     x = CURSOR.c - width / 2;
     if(x<0) x = 0;
     
-    if (CURSOR.c + 5 > state->canvas_len)
-        x -= CURSOR.c - state->canvas_len;
+    if (CURSOR.c + 5 > canvas_len)
+        x -= CURSOR.c - canvas_len;
 #else
 
     int cx = CURSOR.x, cy = CURSOR.y;
@@ -552,7 +559,7 @@ void debug_values()
     i = 0;
     while (i < width)
     {
-        printf("|% 3d|", canvas[x + i].value);
+        printf("|% 3d|", CELL);
         i++;
     }
     putchar('\n');
