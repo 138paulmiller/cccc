@@ -71,10 +71,10 @@ Forward is +x, Backward is -x
 #include <string.h> 
 #include "gfx.h"
 
-//"PLUGINS" Compile time determined to confgure progam.
-#define BF           0
+//Enable runtime configuration, use FLAGS for the openg/bf
+#define BF           1
 #define DEBUG        0
-#define OPENGL       1    /*set to 0 by default to prevent opengl build. remove*/
+#define OPENGL       0    /*set to 0 by default to prevent opengl build. remove*/
 #define TEST_OPENGL 0
 
 //265*265 = 65536
@@ -148,14 +148,13 @@ typedef struct
     //set all below with args flags
     int code_len;
     int bracket_depth;
-    int cursor_depth;
     int width, height;
     //eg -ppm exports to ppm by |'ing to flags register
     byte flags;
 }State;
 ///////////////////// End structors
 
-Cursor  cursors[CURSOR_DEPTH];  //TODO cursor stack
+Cursor  cursors[CURSOR_DEPTH];  //TODO dynamic cursor stack size based on number of pairs?
 State * state;
 Cell    * canvas ;        //MAX_W*w+h
 int canvas_len;
@@ -175,7 +174,7 @@ int canvas_len;
 #define CASE(c,stmt) case c : if(!PARSE){stmt; return 1;}
 
 #define COMMENT     ';'        
-#define INPUT       CASE(',' ,   CELL = getchar()              )        
+#define INPUT       CASE(',' ,   CELL = fgetc(stdin);              )        
 #define OUTPUT      CASE('.' ,   draw(); putchar(CELL)                )        
 #define INC         CASE('+' ,   CELL+=CODE.arg;                        )        
 #define DEC         CASE('-' ,   CELL-=CODE.arg;                        )        
@@ -185,7 +184,7 @@ int canvas_len;
 #define BACKWARD    CASE('<' ,   move_backward(CODE.arg)     )        
 #define ROT_CW      CASE('/' ,   rot_cw()    )        
 #define ROT_CCW     CASE('\\',   rot_ccw()     )        
-#define PUSH_CUR    CASE('{' ,   if(++state->sp > state->cursor_depth) ERR("Cursor Stack Overflow",0)      )        
+#define PUSH_CUR    CASE('{' ,   if(++state->sp > CURSOR_DEPTH) ERR("Cursor Stack Overflow",0)      )        
 #define POP_CUR     CASE('}' ,   if(--state->sp < 0) ERR("Cursor Stack Underflow",0)     )        
 #define DRAW        CASE('#' ,   draw();    )        
 #define CLEAR       CASE('@' ,   memset(canvas, 0, sizeof(Cell) * canvas_len);       )        
@@ -236,7 +235,6 @@ void dump()
     puts("Options");
     printf("\tcode_len      : %d\n", state->code_len);
     printf("\tbracket_depth : %d\n", state->bracket_depth);
-    printf("\tcursor_depth : %d\n", state->cursor_depth);
     puts("Canvas");
     printf("\twidth         : %d\n", state->width);
     printf("\theight        : %d\n", state->height);
@@ -258,7 +256,7 @@ void new_state(FILE * file)
     new(Code, state->code, state->code_len);
     CURSOR.c = 0;
 #if !(BF)
-    CURSOR.y  = HEIGHT;
+    CURSOR.y  = HEIGHT-1;
     CURSOR.x  = CURSOR.dy = CURSOR.c =0;
     CURSOR.dx = 1; 
 #endif
@@ -348,9 +346,8 @@ void draw()
 
         fclose(file);
     }
-    if(FLAG(DRAW_OPENGL ))
+    else if(FLAG(DRAW_OPENGL ))
     {
-        puts("asd");
         OPENGL_RENDER;
     }
 }
@@ -408,7 +405,9 @@ byte parse()
             //eat same symbol, increment arg
             //do for push, rots as well
             INC
-            DEC FORWARD BACKWARD
+            DEC
+            FORWARD 
+            BACKWARD
             {       
                do code->arg++;while(sym == (c=fgetc(state->file)));
                     //increment while same sym!, handle newline!!
@@ -468,10 +467,11 @@ int main(int argc, char ** argv)
     new_state
     (stdin); 
     int i;
+/*
     for (i = 1; i < argc; ++i)
         if (strcmp(argv[i], "-"))   
             state->file =fopen(argv[i], "r+");
-    
+*/  
     canvas_len = state->width*state->height;
 
     //init new canvas
@@ -516,16 +516,17 @@ void debug_values()
     
     printf("\n-----------------CURRENT STATE-------------------");
 
-    int width = 10;
+    int tab = 10, htab = 5;
     static byte * rgb;
     dump_cursor();
     printf("\nCODE\t:%c ", CODE.sym);
+    printf("\nARG\t:%d ", CODE.arg);
     printf("\nPC\t%d\n", state->ip);
     printf("\nCHANNEL\t%d\n", CURSOR.c);
 
     int i=0, j, x, y;
 #if BF
-    x = CURSOR.c - width / 2;
+    x = CURSOR.c - tab / 2;
     if(x<0) x = 0;
     
     if (CURSOR.c + 5 > canvas_len)
@@ -533,26 +534,26 @@ void debug_values()
 #else
 
     int cx = CURSOR.x, cy = CURSOR.y;
-    x = CURSOR.x - width / 2;
+    x = CURSOR.x - htab;
     if(x<0) x = 0;
-    y = CURSOR.y - width  / 2;
+    y = CURSOR.y - htab;
     if(y<0) y = 0;
     
-    if (CURSOR.x + 5 > state->width)
-        x -= CURSOR.x - state->width;
-    if (CURSOR.y + 5 > state->height)
-        y -= CURSOR.y - state->height;
+    if (x + tab > state->width)
+        x -= (x+tab) - state->width;
+    if (y + tab > state->height)
+        y -= (y+tab) - state->height;
 #endif
 #if BF
     printf("% 3c ", ' ');
-    while (i < width)
+    while (i < tab)
     {
         printf(" % 3d ", x + i);
         i++;
     }
     putchar('\n');
     i = 0;
-    while (i < width)
+    while (i < tab)
     {
         printf("|% 3d|", CELL);
         i++;
@@ -560,19 +561,20 @@ void debug_values()
     putchar('\n');
 #else
     printf("% 3c ", ' ');
-    while (i < width)
+    while (i < tab)
     {
         printf(" % 3d ", x + i);
         i++;
     }
     putchar('\n');
     j = 0;
-    while (j < width)
+    while (j < tab)
     {
-        printf("% 3d ", y);
         CURSOR.y=y+j;
+
+        printf("% 3d ", CURSOR.y);
         i=0;
-        while (i <  width)
+        while (i <  tab)
         {
             CURSOR.x=x+i;
             rgb = &canvas[INDEX].rgbt[0];
