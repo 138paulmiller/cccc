@@ -1,2 +1,6 @@
-cccc
-*.o
+*.exe
+build/*
+*.VC.db
+*.VC.VC.opendb
+*.vcxproj.user
+temp/*

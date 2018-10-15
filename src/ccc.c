@@ -72,9 +72,9 @@ Forward is +x, Backward is -x
 #include "gfx.h"
 
 //Enable runtime configuration, use FLAGS for the openg/bf
-#define BF           1
+#define BF           0
 #define DEBUG        0
-#define OPENGL       0    /*set to 0 by default to prevent opengl build. remove*/
+#define OPENGL       1    /*set to 0 by default to prevent opengl build. remove*/
 #define TEST_OPENGL 0
 
 //265*265 = 65536
@@ -94,7 +94,7 @@ Forward is +x, Backward is -x
 
 //todo, 
 #if OPENGL
-    #define  OPENGL_INIT            gl_init(state->width, state->height); shader_init(); vao_init();
+    #define  OPENGL_INIT            gl_init(state->width, state->height); shader_init(); vao_init();gl_clear(); 
     #define  OPENGL_DESTROY         vao_destroy(); shader_destroy(); gl_destroy();                   
     #define  OPENGL_RENDER        gl_clear(); glUseProgram(m_program);  load_texture(&(canvas[0].rgbt[0]), state->width, state->height); vao_render();
 //gl_update(); load_texture(&canvas[0].rgbt[0], state->width,state->height); vao_render()
