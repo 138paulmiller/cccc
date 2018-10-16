@@ -192,6 +192,12 @@ void load_texture(GLubyte * data, int w, int h)
 
 }
 
+void update_texture(GLubyte * data, int w, int h, int xoff, int yoff)
+{
+glTexSubImage2D(  GL_TEXTURE_2D, 0,xoff,yoff,w,h,GL_RGBA,GL_UNSIGNED_BYTE,data);
+
+}
+
 
 int test_opengl()
 {

@@ -52,7 +52,7 @@ wrap or no wrap for handling out of bounds???
 cccc
 //for opengl texture set stride to be sizeof(cell) and only read 3 rgb afor textture imagae data
 //also, trying only loading texture once, se if modifying buffer will update on GPU
-
+//USE PIXEL BUFFER!!
 
 
 # Initial Conditions
@@ -96,10 +96,22 @@ Forward is +x, Backward is -x
 
 //todo, 
 #if OPENGL
-    #define  OPENGL_INIT            gl_init(state->width, state->height); shader_init(); vao_init();
-    #define  OPENGL_DESTROY         vao_destroy(); shader_destroy(); gl_destroy();                   
-    #define  OPENGL_RENDER        gl_clear(); glUseProgram(m_program);  load_texture(&(canvas[0].rgbt[0]), state->width, state->height); vao_render();
-//gl_update(); load_texture(&canvas[0].rgbt[0], state->width,state->height); vao_render()
+    #define  OPENGL_INIT            gl_init(state->width, state->height);\
+                                    shader_init();\
+                                    glUseProgram(m_program);\
+                                    vao_init();\
+                                    load_texture(&(canvas[0].rgbt[0]), state->width, state->height);
+
+    #define  OPENGL_DESTROY         vao_destroy(); \
+                                    shader_destroy();\
+                                    gl_destroy();                   
+    #define  OPENGL_RENDER          gl_clear(); \
+                                    update_texture(&(canvas[0].rgbt[0]), CURSOR.maxX - CURSOR.minX,\
+                                                                        CURSOR.maxY  - CURSOR.minY,\
+                                                                        CURSOR.minX,CURSOR.minY);\
+                                    vao_render();
+
+ //gl_update(); load_texture(&canvas[0].rgbt[0], state->width,state->height); vao_render()
 #else
     enum{ OPENGL_INIT, OPENGL_RENDER, OPENGL_DESTROY};
 #endif 
@@ -130,6 +142,7 @@ typedef struct
 typedef struct 
 {
     int    x, y;
+    int    minX,minY,maxX,maxY;
     int    c;    //current channel
     int    dx,dy;    //movement dir (1,0),(0,1),(-1,0),(0,-1)
 } Cursor;
@@ -260,6 +273,8 @@ void new_state(FILE * file)
 #if !(BF)
     CURSOR.y  = HEIGHT-1;
     CURSOR.x  = CURSOR.dy = CURSOR.c =0;
+    CURSOR.minX  = CURSOR.minY = 0;
+    CURSOR.maxX  = WIDTH; CURSOR.maxY = HEIGHT;
     CURSOR.dx = 1; 
 #endif
 }
@@ -267,6 +282,7 @@ void new_state(FILE * file)
 
 byte check_bound()
 {
+
 #if BF
     if (CURSOR.c >= canvas_len || CURSOR.c < 0)
         ERR("Cursor Out of bounds: tape length=%d :  pos %d\n", canvas_len, CURSOR.c);
@@ -274,10 +290,15 @@ byte check_bound()
 #else
     if (CURSOR.x >= state->width || CURSOR.y >= state->height || CURSOR.x < 0 || CURSOR.y < 0)
         ERR("\nCursor Out of bounds: canvas size (%d, %d): Cursor at pos (%d, %d)\n", state->width, state->height, CURSOR.x, CURSOR.y);
-
+    if(CURSOR.y < CURSOR.minY )CURSOR.minY = CURSOR.y;
+    if(CURSOR.x < CURSOR.minX )CURSOR.minX = CURSOR.x;
+    
+    if(CURSOR.y > CURSOR.maxY )CURSOR.maxY = CURSOR.y;
+    if(CURSOR.x > CURSOR.maxX )CURSOR.maxX = CURSOR.x;
 #endif
     return 1;
 }
+
 
 byte move_forward(int amt)
 {
@@ -288,7 +309,8 @@ byte move_forward(int amt)
     CURSOR.y -= CURSOR.dy*amt;
 #endif
     check_bound();
-    return 1;
+
+       return 1;
 }
 
 
@@ -301,8 +323,12 @@ byte move_backward(int amt)
     CURSOR.y += CURSOR.dy*amt;
 #endif
     check_bound();
+
+    
     return 1;
 }
+
+
 
 
 void rot_cw()
@@ -336,6 +362,13 @@ void rot_ccw()
 
 void draw()
 {
+    //FIX LOGIC to only update texture region
+
+    //CURSOR.minX = CURSOR.x;
+    //CURSOR.minY = CURSOR.y;
+    //CURSOR.maxX = CURSOR.x;
+    //CURSOR.maxY = CURSOR.y;
+
     int i;
     if (FLAG(DRAW_PPM))
     {

@@ -8,3 +8,5 @@ bf:
 	$(CC) $(SRC)/ccc.c -DBF=1 -o cccc $(FLAGS)
 opengl:
 	$(CC) $(SRC)/ccc.c -DOPENGL=1 -o cccc $(FLAGS)
+clean:
+	rm cccc
