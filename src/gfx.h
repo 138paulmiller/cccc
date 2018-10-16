@@ -188,15 +188,14 @@ void load_texture(GLubyte * data, int w, int h)
 { 
     glBindTexture(GL_TEXTURE_2D, m_texture);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER,   GL_LINEAR);
-   glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, (void*)data);
-   //glTexSubImage2D(GL_TEXTURE_2D, 0, GL_RGB, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, (void*)data);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, (void*)data);
+    //glTexSubImage2D(GL_TEXTURE_2D, 0, GL_RGB, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, (void*)data);
 
 }
 
-void update_texture(GLubyte * data, int w, int h, int xoff, int yoff)
+void update_texture(GLubyte * data, int xoff, int yoff, int w, int h)
 {
-glTexSubImage2D(  GL_TEXTURE_2D, 0,xoff,yoff,w,h,GL_RGBA,GL_UNSIGNED_BYTE,data);
-
+    glTexSubImage2D(  GL_TEXTURE_2D, 0,xoff,yoff,w,h,GL_RGBA,GL_UNSIGNED_BYTE,data);
 }
 
 

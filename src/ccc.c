@@ -31,8 +31,8 @@ Create A ahigh Level Macro Language (introduce variables)?
 =    |    Set cursor to top stack
 #    |    Write current canvas to output target
 @    |    Clear canvas
-x    |    set x to current cell
-y    |    set y to current cell
+x    |    set current cell to x 
+y    |    set current cell to y 
 r    |    switch to r channel
 g    |    switch to g channel
 b    |    switch to b channel
@@ -105,9 +105,7 @@ Forward is +x, Backward is -x
                                     shader_destroy();\
                                     gl_destroy();                   
     #define  OPENGL_RENDER          gl_clear(); \
-                                    update_texture(&(canvas[0].rgbt[0]), CURSOR.maxX - CURSOR.minX,\
-                                                                        CURSOR.maxY  - CURSOR.minY,\
-                                                                        CURSOR.minX,CURSOR.minY);\
+                                    update_texture(&(canvas[0].rgbt[0]), 0,0, state->width, state->height);\
                                     vao_render();
 
  //gl_update(); load_texture(&canvas[0].rgbt[0], state->width,state->height); vao_render()
@@ -127,7 +125,7 @@ Forward is +x, Backward is -x
 enum{R=0, G=1, B=2, T=3};
 
 
-typedef unsigned char    byte;
+typedef char    byte;
 typedef int32_t          int32;
 
 typedef struct
@@ -182,16 +180,21 @@ int canvas_len;
 #define INDEX state->height*CURSOR.y + CURSOR.x
 #endif
 
+#define PIXEL        canvas[INDEX]
 #define CELL        canvas[INDEX].rgbt[CURSOR.c]
 #define CODE        state->code[state->ip]
 
 #define CASE(c,stmt) case c : if(!PARSE){stmt; return 1;}
 
-#define COMMENT     ';'        
+#define JUMP_SYM -2
+
+#define COMMENT          ';'        
+#define JUMP        CASE(JUMP_SYM ,   printf("[%c ",CODE.sym );state->ip = CODE.arg;    printf(" %c ]",CODE.sym );             ) //skip is used by optimization pass to prevent reallocing array              
+#define MOVE        CASE('%'  ,  move_cell()                             ) //skip is used by optimization pass to prevent reallocing array              
 #define INPUT       CASE(',' ,   CELL = fgetc(stdin);                   )        
 #define OUTPUT      CASE('.' ,   putchar(CELL)                          )        
 #define INC         CASE('+' ,   CELL+=CODE.arg;                        )        
-#define DEC         CASE('-' ,   CELL-=CODE.arg;                        )        
+#define DEC         CASE('-' ,   CELL-=CODE.arg                       )        
 #define BEG_LOOP    CASE('[' ,   if(!CELL)state->ip = CODE.arg)        
 #define END_LOOP    CASE(']' ,   if(CELL)state->ip = CODE.arg )        
 #define FORWARD     CASE('>' ,   move_forward(CODE.arg)           )        
@@ -200,22 +203,24 @@ int canvas_len;
 #define ROT_CCW     CASE('\\',   rot_ccw()     )        
 #define PUSH_CUR    CASE('{' ,   if(++state->sp > CURSOR_DEPTH) ERR("Cursor Stack Overflow",0)      )        
 #define POP_CUR     CASE('}' ,   if(--state->sp < 0) ERR("Cursor Stack Underflow",0)     )        
-#define DRAW        CASE('#' ,   draw();    )        
-#define CLEAR       CASE('@' ,   memset(canvas, 0, sizeof(Cell) * canvas_len);       )        
-#define SET_X       CASE('x' ,   CURSOR.x = CELL;    )        
-#define SET_Y       CASE('y' ,   CURSOR.y = CELL;    )        
-#define SET_R       CASE('r' ,   CURSOR.c = R;    )          
-#define SET_G       CASE('g' ,   CURSOR.c = G;    )          
-#define SET_B       CASE('b' ,   CURSOR.c = B;    )          
-#define SET_T       CASE('t' ,   CURSOR.c = T;    )          
+#define SET_CUR     CASE('=' ,   CURSOR = cursors[state->sp]     )        
+#define DRAW        CASE('#' ,   draw()    )        
+#define CLEAR       CASE('@' ,   memset(canvas, 0, sizeof(Cell) * canvas_len)       )        
+#define SET_Y       CASE('y' ,   CELL = CURSOR.y    )        
+#define SET_X       CASE('x' ,   CELL = CURSOR.x    )        
+#define SET_R       CASE('r' ,   CURSOR.c = R   )          
+#define SET_G       CASE('g' ,   CURSOR.c = G   )          
+#define SET_B       CASE('b' ,   CURSOR.c = B   )          
+#define SET_T       CASE('t' ,   CURSOR.c = T   )          
 
 //USE SYMS FOR CAHNNELS to allow comments!!!!!
 
 #define BF_CODES INPUT OUTPUT INC DEC BEG_LOOP END_LOOP FORWARD BACKWARD
+#define OPT_CODES JUMP MOVE
 #if BF
-    #define CASES   BF_CODES
+    #define CASES   BF_CODES OPT_CODES
 #else
-    #define CASES BF_CODES                              \
+    #define CASES BF_CODES         OPT_CODES            \
             ROT_CW      ROT_CCW                         \
             DRAW        CLEAR                           \
             SET_X       SET_Y                           \
@@ -272,8 +277,6 @@ void new_state(FILE * file)
 #if !(BF)
     CURSOR.y  = HEIGHT-1;
     CURSOR.x  = CURSOR.dy = CURSOR.c =0;
-    CURSOR.minX  = CURSOR.minY = 0;
-    CURSOR.maxX  = WIDTH; CURSOR.maxY = HEIGHT;
     CURSOR.dx = 1; 
 #endif
 }
@@ -289,11 +292,7 @@ byte check_bound()
 #else
     if (CURSOR.x >= state->width || CURSOR.y >= state->height || CURSOR.x < 0 || CURSOR.y < 0)
         ERR("\nCursor Out of bounds: canvas size (%d, %d): Cursor at pos (%d, %d)\n", state->width, state->height, CURSOR.x, CURSOR.y);
-    if(CURSOR.y < CURSOR.minY )CURSOR.minY = CURSOR.y;
-    if(CURSOR.x < CURSOR.minX )CURSOR.minX = CURSOR.x;
-    
-    if(CURSOR.y > CURSOR.maxY )CURSOR.maxY = CURSOR.y;
-    if(CURSOR.x > CURSOR.maxX )CURSOR.maxX = CURSOR.x;
+
 #endif
     return 1;
 }
@@ -311,7 +310,7 @@ byte move_forward(int amt)
 
        return 1;
 }
-
+//create move that takes in +-
 
 byte move_backward(int amt)
 {
@@ -327,6 +326,15 @@ byte move_backward(int amt)
     return 1;
 }
 
+void move_cell()
+{
+    byte* a = &CELL;
+    move_forward(1);
+    CELL = *a;
+    *a=  0;
+    move_forward(-1);
+
+}
 
 
 
@@ -363,10 +371,10 @@ void draw()
 {
     //FIX LOGIC to only update texture region
 
-    //CURSOR.minX = CURSOR.x;
-    //CURSOR.minY = CURSOR.y;
-    //CURSOR.maxX = CURSOR.x;
-    //CURSOR.maxY = CURSOR.y;
+    CURSOR.minX = CURSOR.x;
+    CURSOR.minY = CURSOR.y;
+    CURSOR.maxX = CURSOR.x;
+    CURSOR.maxY = CURSOR.y;
 
     int i;
     if (FLAG(DRAW_PPM))
@@ -467,13 +475,73 @@ byte parse()
     {
         ERR("\nThe leading %d brackets are not closed", bracket_index);
     }
+
+
+
     //reset ip
     state->sp = 0;
     state->ip = 0;
+    
     return 1;
 
 }
 
+//Ad-hoc semantic_analysis
+//nano optimization passes
+#define NEXT_CODE (code=&state->code[++ip])->sym
+void optimize()
+{
+    //MOVE Optimize
+    //translates all instance of [>+<-] pattern to tape[c] = tape[c+1];tape[c] =0
+    //adds a skip  operand tothat will skip following 6 codes 
+    
+    Code * code ;
+    int ip = -1;
+    while(NEXT_CODE )
+    {
+        switch(code->sym)
+        {
+            case '[':
+                   
+                switch(NEXT_CODE)
+                {
+                    case '>':
+                        switch(NEXT_CODE)
+                        {
+
+                            case '+':
+                                switch(NEXT_CODE)
+                                {
+
+                                    case '<':
+                                    switch(NEXT_CODE)
+                                    {
+
+                                        case '-':
+                                         switch(NEXT_CODE)
+                                            {
+
+                                                case ']':
+                                                code->sym = '%'; //MOVE
+                                                (code=&state->code[ip-5])->sym = JUMP_SYM;
+                                                code->arg= ip;
+
+
+                                            }break;
+                                    }break;
+
+                                }break;
+
+                        }break;
+                }break;
+
+        }
+        ip++;
+        /* code */
+    
+    }
+
+}
 
 #define PARSE 0
 byte eval()
@@ -498,15 +566,15 @@ int main(int argc, char ** argv)
     //-f value
     //file
     
-    new_state
-    (stdin); 
-    int i;
+    new_state(stdin); 
+    canvas_len = state->width*state->height;
+
+//    int i;
 /*
     for (i = 1; i < argc; ++i)
         if (strcmp(argv[i], "-"))   
             state->file =fopen(argv[i], "r+");
 */  
-    canvas_len = state->width*state->height;
 
     //init new canvas
     new(Cell, canvas, canvas_len);
@@ -519,6 +587,7 @@ int main(int argc, char ** argv)
 
         if (parse())
         {
+            optimize();
 
             while (status 
 
@@ -529,7 +598,6 @@ int main(int argc, char ** argv)
             {
                 status = eval();
                 ++state->ip;
-
                 void debug_values();
 #if DEBUG
                 debug_values();
@@ -621,7 +689,7 @@ void debug_values()
 
     CURSOR.x=cx; CURSOR.y = cy;
 #endif
-    getchar();
+    //getchar();
 }
 
 
