@@ -71,12 +71,10 @@ Forward is +x, Backward is -x
 #include <string.h> 
 #include "gfx.h"
 
-//Enable runtime configuration, use FLAGS for the openg/bf
+//"PLUGINS" Compile time determined to confgure progam.
 #define BF           0
 #define DEBUG        0
 #define OPENGL       1    /*set to 0 by default to prevent opengl build. remove*/
-
-
 #define TEST_OPENGL 0
 
 //265*265 = 65536
@@ -176,8 +174,8 @@ int canvas_len;
 #define CASE(c,stmt) case c : if(!PARSE){stmt; return 1;}
 
 #define COMMENT     ';'        
-#define INPUT       CASE(',' ,   CELL = fgetc(stdin);                   )        
-#define OUTPUT      CASE('.' ,   putchar(CELL)                          )        
+#define INPUT       CASE(',' ,   CELL = fgetc(stdin);              )        
+#define OUTPUT      CASE('.' ,   draw(); putchar(CELL)                )        
 #define INC         CASE('+' ,   CELL+=CODE.arg;                        )        
 #define DEC         CASE('-' ,   CELL-=CODE.arg;                        )        
 #define BEG_LOOP    CASE('[' ,   if(!CELL)state->ip = CODE.arg)        
@@ -348,8 +346,9 @@ void draw()
 
         fclose(file);
     }
-    else if(FLAG(DRAW_OPENGL ))
+    if(FLAG(DRAW_OPENGL ))
     {
+        puts("asd");
         OPENGL_RENDER;
     }
 }
