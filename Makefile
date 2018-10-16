@@ -8,5 +8,12 @@ bf:
 	$(CC) $(SRC)/ccc.c -DBF=1 -o cccc $(FLAGS)
 opengl:
 	$(CC) $(SRC)/ccc.c -DOPENGL=1 -o cccc $(FLAGS)
+
+
+debug-bf:
+	$(CC) $(SRC)/ccc.c -DDEBUG=1 -DBF=1 -o cccc $(FLAGS)
+debug-opengl:
+	$(CC) $(SRC)/ccc.c -DDEBUG=1 -DOPENGL=1 -o cccc $(FLAGS)
+
 clean:
 	rm cccc
