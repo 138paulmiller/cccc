@@ -76,7 +76,6 @@ Forward is +x, Backward is -x
 #define DEBUG        0
 #define OPENGL       1    /*set to 0 by default to prevent opengl build. remove*/
 
-
 #define TEST_OPENGL 0
 
 //265*265 = 65536

@@ -1,0 +1,38 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="src">
+      <UniqueIdentifier>{871081d1-0b17-4866-8dde-72919d6bdba3}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="examples">
+      <UniqueIdentifier>{caaea423-5e68-479b-9652-23a2564a86db}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="src\ccc.c">
+      <Filter>src</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="src\gfx.h">
+      <Filter>src</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="examples\bitwidth.b">
+      <Filter>examples</Filter>
+    </None>
+    <None Include="examples\mandelbrot.b">
+      <Filter>examples</Filter>
+    </None>
+    <None Include="examples\out.ppm">
+      <Filter>examples</Filter>
+    </None>
+    <None Include="examples\scan_x.c4">
+      <Filter>examples</Filter>
+    </None>
+    <None Include="examples\test1.c4">
+      <Filter>examples</Filter>
+    </None>
+  </ItemGroup>
+</Project>
