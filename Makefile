@@ -1,19 +1,19 @@
 CC=gcc
 SRC=src
-FLAGS = -lGL -lGLEW -lSDL2 -lSDL2main
-all:
-	$(CC) $(SRC)/ccc.c -o cccc $(FLAGS)
+FLAGS = -lGL -lGLEW -lSDL2 -lSDL2main -march=native -O3
+COMPILE = $(CC) $(SRC)/ccc.c -o cccc $(FLAGS)
+
 
 bf:
-	$(CC) $(SRC)/ccc.c -DBF=1 -o cccc $(FLAGS)
-opengl:
-	$(CC) $(SRC)/ccc.c -DOPENGL=1 -o cccc $(FLAGS)
+	$(COMPILE) -DBF=1
+gl:
+	$(COMPILE) -DOPENGL=1
 
 
 debug-bf:
-	$(CC) $(SRC)/ccc.c -DDEBUG=1 -DBF=1 -o cccc $(FLAGS)
-debug-opengl:
-	$(CC) $(SRC)/ccc.c -DDEBUG=1 -DOPENGL=1 -o cccc $(FLAGS)
+	$(COMPILE) -DDEBUG=1 -DBF=1 
+debug-gl:
+	$(COMPILE) -DDEBUG=1 -DOPENGL=1 
 
 clean:
 	rm cccc

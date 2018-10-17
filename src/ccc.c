@@ -74,7 +74,7 @@ Forward is +x, Backward is -x
 //Enable runtime configuration, use FLAGS for the openg/bf
 //SEE MAKEFILE
 //#define BF           0
-//#define DEBUG        0
+//#define DEBUG        1
 //#define OPENGL       1    /*set to 0 by default to prevent opengl build. remove*/
 
 #define TEST_OPENGL 0
@@ -90,8 +90,6 @@ Forward is +x, Backward is -x
 //flags used to determine how data is output on #
 #define DRAW_PPM         0x01    /*0000 0001*/
 #define DRAW_OPENGL      0x02    /*0000 0010*/
-
-
 
 
 //todo, 
@@ -115,8 +113,7 @@ Forward is +x, Backward is -x
 #endif 
 
 
-#define CLEANUP             OPENGL_DESTROY;    free(canvas);     free(state->code);free(state); 
-#define ERR(...) {printf(__VA_ARGS__); CLEANUP; exit(0);}
+#define EXIT(...) {printf(__VA_ARGS__); OPENGL_DESTROY;    free(canvas);     free(state->code);free(state); exit(0);}
 
 
 
@@ -134,7 +131,6 @@ typedef struct
     byte sym;
     //if [ or ], jump is index to the matching brace
     int arg;
-    int line, col;
 }Code;
 
 typedef struct 
@@ -147,7 +143,12 @@ typedef struct
 
 typedef struct
 {
-    byte rgbt[4];
+    union
+    {
+        byte rgbt[4];
+        int32 value;
+
+    };
 }Cell;
 
 typedef struct 
@@ -167,28 +168,27 @@ typedef struct
 }State;
 ///////////////////// End structors
 
-Cursor  cursors[CURSOR_DEPTH];  //TODO dynamic cursor stack size based on number of pairs?
-State * state;
-Cell    * canvas ;        //MAX_W*w+h
+Cursor      cursors[CURSOR_DEPTH];  //TODO dynamic cursor stack size based on number of pairs?
+State   *   state;
+Cell    *   canvas ;        //MAX_W*w+h
 int canvas_len;
-
 
 #define CURSOR cursors[state->sp]
 
-#if BF
-#define INDEX CURSOR.c
-#else
-#define INDEX state->height*CURSOR.y + CURSOR.x
-#endif
+#define INDEX       state->height*CURSOR.y + CURSOR.x
 
-#define PIXEL        canvas[INDEX]
-#define CELL        canvas[INDEX].rgbt[CURSOR.c]
+#if BF
+    #define CELL        canvas[INDEX].value
+#else
+    #define CELL        canvas[INDEX].rgbt[CURSOR.c]
+#endif
 #define CODE        state->code[state->ip]
+
 
 #define CASE(c,stmt) case c : if(!PARSE){stmt; return 1;}
 
-#define JUMP_SYM 255
-#define MOVE_SYM 254
+#define JUMP_SYM 254
+#define MOVE_SYM 255
 
 #define COMMENT          ';'        
 #define JUMP        CASE(JUMP_SYM ,   state->ip = CODE.arg;) //skip is used by optimization pass to prevent reallocing array              
@@ -199,33 +199,29 @@ int canvas_len;
 #define DEC         CASE('-' ,   CELL-=CODE.arg                       )        
 #define BEG_LOOP    CASE('[' ,   if(!CELL)state->ip = CODE.arg)        
 #define END_LOOP    CASE(']' ,   if(CELL)state->ip = CODE.arg )        
-#define FORWARD     CASE('>' ,   move_forward(CODE.arg)           )        
-#define BACKWARD    CASE('<' ,   move_backward(CODE.arg)     )        
+#define FORWARD     CASE('>' ,   move(CODE.arg)           )        
+#define BACKWARD    CASE('<' ,   move(-1*CODE.arg)     )        
 #define ROT_CW      CASE('/' ,   rot_cw()    )        
 #define ROT_CCW     CASE('\\',   rot_ccw()     )        
-#define PUSH_CUR    CASE('{' ,   if(++state->sp > CURSOR_DEPTH) ERR("Cursor Stack Overflow",0)      )        
-#define POP_CUR     CASE('}' ,   if(--state->sp < 0) ERR("Cursor Stack Underflow",0)     )        
+#define PUSH_CUR    CASE('{' ,   if(++state->sp > CURSOR_DEPTH) EXIT("Cursor Stack Overflow",0)      )        
+#define POP_CUR     CASE('}' ,   if(--state->sp < 0) EXIT("Cursor Stack Underflow",0)     )        
 #define SET_CUR     CASE('=' ,   CURSOR = cursors[state->sp]     )        
 #define DRAW        CASE('#' ,   draw()    )        
-#define CLEAR       CASE('@' ,   memset(canvas, 0, sizeof(Cell) * canvas_len)       )        
-#define SET_Y       CASE('y' ,   CELL = CURSOR.y    )        
-#define SET_X       CASE('x' ,   CELL = CURSOR.x    )        
+#define CLEAR       CASE('@' ,   memset(canvas, 0, sizeof(Cell) * canvas_len)       )               
 #define SET_R       CASE('r' ,   CURSOR.c = R   )          
 #define SET_G       CASE('g' ,   CURSOR.c = G   )          
 #define SET_B       CASE('b' ,   CURSOR.c = B   )          
 #define SET_T       CASE('t' ,   CURSOR.c = T   )          
 
 //USE SYMS FOR CAHNNELS to allow comments!!!!!
-
-#define BF_CODES INPUT OUTPUT INC DEC BEG_LOOP END_LOOP FORWARD BACKWARD
 #define OPT_CODES JUMP MOVE
+#define BF_CODES INPUT OUTPUT INC DEC BEG_LOOP END_LOOP FORWARD BACKWARD OPT_CODES
 #if BF
-    #define CASES   BF_CODES OPT_CODES
+    #define CASES   BF_CODES 
 #else
-    #define CASES BF_CODES         OPT_CODES            \
+    #define CASES BF_CODES                              \
             ROT_CW      ROT_CCW                         \
             DRAW        CLEAR                           \
-            SET_X       SET_Y                           \
             PUSH_CUR    POP_CUR                         \
             SET_R       SET_G       SET_B       SET_T   
 #endif
@@ -234,108 +230,36 @@ int canvas_len;
 #define new(type, ptr, len)      \
 {    int sz = sizeof(type) * len;\
     ptr = (type*)malloc(sz);     \
-    if(ptr)memset(ptr, 0, sz);else{CLEANUP;exit(-1);}   \
+    if(ptr)memset(ptr, 0, sz);else{EXIT("");}   \
 }                                
-
-
-void dump_cursor()
+void move(int amt)
 {
-#if BF
-    printf("Cursor:%d\n", CURSOR.c);
-#else
-    puts("Cursor");
-    printf("\tx  : %d\n", CURSOR.x);
-    printf("\ty  : %d\n", CURSOR.y);
-    printf("\tdx : %d\n", CURSOR.dx);
-    printf("\tdy : %d\n", CURSOR.dy);
-#endif
-}
-
-void dump()
-{
-    puts("Options");
-    printf("\tcode_len      : %d\n", state->code_len);
-    printf("\tbracket_depth : %d\n", state->bracket_depth);
-    puts("Canvas");
-    printf("\twidth         : %d\n", state->width);
-    printf("\theight        : %d\n", state->height);
-}
-
-
-void new_state(FILE * file)
-{
-    state = (State*)malloc(sizeof(State));
-
-    state->file = file;
-    state->code_len = CODE_LENGTH;
-    state->width = WIDTH;
-    state->height = HEIGHT;
-    state->flags = FLAGS;
-    state->sp = 0;
-
-
-    new(Code, state->code, state->code_len);
-    CURSOR.c = 0;
-#if !(BF)
-    CURSOR.y  = HEIGHT-1;
-    CURSOR.x  = CURSOR.dy = CURSOR.c =0;
-    CURSOR.dx = 1; 
-#endif
-}
-
-
-byte check_bound()
-{
-
-#if BF
-    if (CURSOR.c >= canvas_len || CURSOR.c < 0)
-        ERR("Cursor Out of bounds: tape length=%d :  pos %d\n", canvas_len, CURSOR.c);
-        
-#else
-    if (CURSOR.x >= state->width || CURSOR.y >= state->height || CURSOR.x < 0 || CURSOR.y < 0)
-        ERR("\nCursor Out of bounds: canvas size (%d, %d): Cursor at pos (%d, %d)\n", state->width, state->height, CURSOR.x, CURSOR.y);
-
-#endif
-    return 1;
-}
-
-
-byte move_forward(int amt)
-{
-#if BF
-    CURSOR.c+=amt;        
-#else
     CURSOR.x += CURSOR.dx*amt;
+#if BF
+    if (CURSOR.x >= state->width)
+    {
+        CURSOR.x = CURSOR.x-state->width;   
+        CURSOR.y++;
+    } 
+#else
     CURSOR.y -= CURSOR.dy*amt;
 #endif
-    check_bound();
-
-       return 1;
-}
-//create move that takes in +-
-
-byte move_backward(int amt)
-{
-#if BF
-    CURSOR.c-=amt;
-#else       
-    CURSOR.x -= CURSOR.dx*amt;
-    CURSOR.y += CURSOR.dy*amt;
-#endif
-    check_bound();
-
-    
-    return 1;
+    if (CURSOR.x >= state->width || CURSOR.y >= state->height || CURSOR.x < 0 || CURSOR.y < 0)
+        EXIT("\nCursor Out of bounds: canvas size (%d, %d): Cursor at pos (%d, %d)\n", state->width, state->height, CURSOR.x, CURSOR.y);
 }
 
 void move_cell()
 {
-    byte* a = &CELL;
-    move_forward(1);
+#if BF 
+    int32
+#else 
+    byte
+#endif
+    * a = &CELL;
+    move(1);
     CELL = *a;
     *a=  0;
-    move_forward(-1);
-
+    move(-1);
 }
 
 
@@ -381,16 +305,15 @@ void draw()
     int i;
     if (FLAG(DRAW_PPM))
     {
-        //dump canvas too ppm
         FILE *file;
-        file = fopen("out.ppm", "wb"); /* b - binary mode */
+        file = fopen("out.ppm", "wb"); 
         fprintf(file, "P6\n%d %d\n255\n", state->width, state->height);
         for (i = 0; i < canvas_len; ++i)
             fwrite(&canvas[i], 1, 3, file);
 
         fclose(file);
     }
-    else if(FLAG(DRAW_OPENGL ))
+    if(FLAG(DRAW_OPENGL ))
     {
         OPENGL_RENDER;
     }
@@ -407,21 +330,15 @@ byte parse()
     static int bracket_stack[BRACKET_DEPTH];
     static Code     * code;
     if (!state) return 0;
-    //index of the end of bracket stack (top is at bracket_index-1 )
+
     int        bracket_index = 0;
     int        sym,c;
-    int        line = 0,col = 0;    //
-
-
+    int        line = 0,col = 0;    
     state->ip=0;
-    _loop:
     while ((sym = fgetc(state->file)) != -1)
     {
         if (state->ip > state->code_len)
-        {
-            ERR("Not enough Code Memory! Please shorten source code Max: %d", state->code_len);
-        }
-        
+            EXIT("Not enough Code Memory! Please shorten source code Max: %d", state->code_len);
 
         col++;
         code = &CODE;
@@ -437,9 +354,7 @@ byte parse()
             {
 
                 if (bracket_index <= 0)
-                {
-                    ERR("Expecting Opening Bracket for bracket at line:%d, col:%d ", line, col);
-                }
+                    EXIT("Expecting Opening Bracket for bracket at line:%d, col:%d ", line, col);
                 int open_brack_index = bracket_stack[--bracket_index];
                 code->arg = open_brack_index;
                 //jump to next statement after closing bracket,
@@ -448,10 +363,7 @@ byte parse()
             };
             //eat same symbol, increment arg
             //do for push, rots as well
-            INC
-            DEC
-            FORWARD 
-            BACKWARD
+            INC DEC FORWARD BACKWARD
             {       
                do code->arg++;while(sym == (c=fgetc(state->file)));
                     //increment while same sym!, handle newline!!
@@ -462,12 +374,9 @@ byte parse()
         {
             CASES
             {
-            code->sym = sym;
-            code->line = line;
-            code->col = col;
-            state->ip++;
+                code->sym = sym;
+                state->ip++;
             }
-         
             //rmeove col and lines !!!
             case '\n': col=0; line++;    
         }//EndSwitch
@@ -475,7 +384,7 @@ byte parse()
     }//End while
     if (bracket_index > 0)
     {
-        ERR("\nThe leading %d brackets are not closed", bracket_index);
+        EXIT("\nThe leading %d brackets are not closed", bracket_index);
     }
 
 
@@ -490,37 +399,37 @@ byte parse()
 
 //Ad-hoc semantic_analysis
 //nano optimization passes
-#define NEXT_CODE (code=&state->code[++ip])->sym
+#define NEXT_SYM  (code = &state->code[++ip])->sym
+
 void optimize()
 {
     //MOVE Optimize
     //translates all instance of [>+<-] pattern to tape[c] = tape[c+1];tape[c] =0
     //adds a skip  operand tothat will skip following 6 codes 
     
-    Code * code ;
-    int ip = -1;
-    while(NEXT_CODE )
-    {
-        switch(code->sym)
+    int ip = 0;
+    Code * code;
+    do{
+        switch(NEXT_SYM)
         {
             case '[':
-                   
-                switch(NEXT_CODE)
+                
+                switch(NEXT_SYM)
                 {
                     case '>':
-                        switch(NEXT_CODE)
+                        switch(NEXT_SYM)
                         {
 
                             case '+':
-                                switch(NEXT_CODE)
+                                switch(NEXT_SYM)
                                 {
 
                                     case '<':
-                                    switch(NEXT_CODE)
+                                    switch(NEXT_SYM)
                                     {
 
                                         case '-':
-                                         switch(NEXT_CODE)
+                                         switch(NEXT_SYM)
                                             {
 
                                                 case ']':
@@ -536,17 +445,17 @@ void optimize()
                         }break;
                 }break;
 
+
         }
-        ip++;
         /* code */
-    
-    }
+    }  while(code->sym);  
 
 }
 
 #define PARSE 0
 byte eval()
 {
+
     switch (CODE.sym){
         CASES
     }
@@ -558,16 +467,23 @@ byte eval()
 
 int main(int argc, char ** argv)
 {
-#if TEST_OPENGL
-    return test_opengl();
-
-#endif
-
     //init state syntax
     //-f value
     //file
-    
-    new_state(stdin); 
+    state = (State*)malloc(sizeof(State));
+
+    state->file = stdin;
+    state->code_len = CODE_LENGTH;
+    state->width = WIDTH;
+    state->height = HEIGHT;
+    state->flags = FLAGS;
+    state->sp = 0;
+    new(Code, state->code, state->code_len);
+    CURSOR.c = 0;
+    CURSOR.y  = HEIGHT-1;
+    CURSOR.x  = CURSOR.dy = CURSOR.c =0;
+    CURSOR.dx = 1; 
+
     canvas_len = state->width*state->height;
 
 //    int i;
@@ -586,31 +502,31 @@ int main(int argc, char ** argv)
 
     OPENGL_INIT;        
 
-        if (parse())
-        {
-            optimize();
+    if (parse())
+    {
+        optimize();
 
-            while (status 
-
+        while   (   status 
 #if OPENGL
-                && gl_update()
+            && gl_update()
 #endif
                 )
-            {
-                status = eval();
-                ++state->ip;
-                void debug_values();
+        {
+            status = eval();
+            ++state->ip;
 #if DEBUG
-                debug_values();
+            void debug_values();
+            debug_values();
 #endif 
-            }
-    
         }
+    }
     //calls destroy and exits
-    CLEANUP;
+    EXIT("");
 
 }
 
+
+#if DEBUG
 
 ///////////////////////////////////////////////// DEBUG /////////////////////////////////////////////////
 //show local memory for values
@@ -621,21 +537,17 @@ void debug_values()
 
     int tab = 10, htab = 5;
     static byte * rgb;
-    dump_cursor();
+    puts("Cursor");
+    printf("\tx  : %d\n", CURSOR.x);
+    printf("\ty  : %d\n", CURSOR.y);
+    printf("\tdx : %d\n", CURSOR.dx);
+    printf("\tdy : %d\n", CURSOR.dy);
     printf("\nCODE\t:%c ", CODE.sym);
     printf("\nARG\t:%d ", CODE.arg);
     printf("\nPC\t%d\n", state->ip);
     printf("\nCHANNEL\t%d\n", CURSOR.c);
 
     int i=0, j, x, y;
-#if BF
-    x = CURSOR.c - tab / 2;
-    if(x<0) x = 0;
-    
-    if (CURSOR.c + 5 > canvas_len)
-        x -= CURSOR.c - canvas_len;
-#else
-
     int cx = CURSOR.x, cy = CURSOR.y;
     x = CURSOR.x - htab;
     if(x<0) x = 0;
@@ -646,23 +558,6 @@ void debug_values()
         x -= (x+tab) - state->width;
     if (y + tab > state->height)
         y -= (y+tab) - state->height;
-#endif
-#if BF
-    printf("% 3c ", ' ');
-    while (i < tab)
-    {
-        printf(" % 3d ", x + i);
-        i++;
-    }
-    putchar('\n');
-    i = 0;
-    while (i < tab)
-    {
-        printf("|% 3d|", CELL);
-        i++;
-    }
-    putchar('\n');
-#else
     printf("% 3c ", ' ');
     while (i < tab)
     {
@@ -689,8 +584,8 @@ void debug_values()
     }
 
     CURSOR.x=cx; CURSOR.y = cy;
-#endif
     //getchar();
 }
+#endif 
 
 
