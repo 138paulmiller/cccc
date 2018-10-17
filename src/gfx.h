@@ -60,7 +60,6 @@ int gl_update()
 {
   //swap render and display buffers
     SDL_GL_SwapWindow(m_sdlWindow);
-
     //Poll input events
     SDL_Event event;
     while (SDL_PollEvent(&event))

@@ -15,3 +15,13 @@
 where a and b are "literals" e.g +++ -----
 
 	>y[-<x>]<
+
+## Examples
+
+### for(a * b) X
+
+	>a[-<b>]<
+	[
+		X
+		[>+<-]>-
+	]

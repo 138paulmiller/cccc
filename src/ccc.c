@@ -69,7 +69,6 @@ Forward is +x, Backward is -x
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h> 
-#include "gfx.h"
 
 //Enable runtime configuration, use FLAGS for the openg/bf
 //SEE MAKEFILE
@@ -83,8 +82,8 @@ Forward is +x, Backward is -x
 #define WIDTH           256
 #define HEIGHT          256
 #define CODE_LENGTH     65536/2
-#define BRACKET_DEPTH           2048
-#define CURSOR_DEPTH            2048
+#define BRACKET_DEPTH   2048
+#define CURSOR_DEPTH    2048
 #define FLAGS           DRAW_OPENGL
 // DRAW_PPM | 
 //flags used to determine how data is output on #
@@ -92,25 +91,6 @@ Forward is +x, Backward is -x
 #define DRAW_OPENGL      0x02    /*0000 0010*/
 
 
-//todo, 
-#if OPENGL
-    #define  OPENGL_INIT            gl_init(state->width, state->height);\
-                                    shader_init();\
-                                    glUseProgram(m_program);\
-                                    vao_init();\
-                                    load_texture(&(canvas[0].rgbt[0]), state->width, state->height);
-
-    #define  OPENGL_DESTROY         vao_destroy(); \
-                                    shader_destroy();\
-                                    gl_destroy();                   
-    #define  OPENGL_RENDER          gl_clear(); \
-                                    update_texture(&(canvas[0].rgbt[0]), 0,0, state->width, state->height);\
-                                    vao_render();
-
- //gl_update(); load_texture(&canvas[0].rgbt[0], state->width,state->height); vao_render()
-#else
-    enum{ OPENGL_INIT, OPENGL_RENDER, OPENGL_DESTROY};
-#endif 
 
 
 #define EXIT(...) {printf(__VA_ARGS__); OPENGL_DESTROY;    free(canvas);     free(state->code);free(state); exit(0);}
@@ -119,76 +99,23 @@ Forward is +x, Backward is -x
 
 //#ANSII COLORS
 #define FLAG(flag) (state->flags & (flag))
-//////////////////////// Structures /////////////////////////////////////////
-enum{R=0, G=1, B=2, T=3};
-
-
-typedef unsigned char    byte;
-typedef int32_t          int32;
-
-typedef struct
-{
-    byte sym;
-    //if [ or ], jump is index to the matching brace
-    int arg;
-}Code;
-
-typedef struct 
-{
-    int    x, y;
-    int    minX,minY,maxX,maxY;
-    int    c;    //current channel
-    int    dx,dy;    //movement dir (1,0),(0,1),(-1,0),(0,-1)
-} Cursor;
-
-typedef struct
-{
-    union
-    {
-        byte rgbt[4];
-        int32 value;
-
-    };
-}Cell;
-
-typedef struct 
-{
-    FILE    *   file;    //defaults stdin
-    Code    *   code;       //op code
-    int sp;  //cursor stack ptr
-    int  ip;  //instruction ptr, 
-
-
-    //set all below with args flags
-    int code_len;
-    int bracket_depth;
-    int width, height;
-    //eg -ppm exports to ppm by |'ing to flags register
-    byte flags;
-}State;
-///////////////////// End structors
-
-Cursor      cursors[CURSOR_DEPTH];  //TODO dynamic cursor stack size based on number of pairs?
-State   *   state;
-Cell    *   canvas ;        //MAX_W*w+h
-int canvas_len;
 
 #define CURSOR cursors[state->sp]
 
 #define INDEX       state->height*CURSOR.y + CURSOR.x
 
 #if BF
-    #define CELL        canvas[INDEX].value
+#define CELL        canvas[INDEX].data
 #else
-    #define CELL        canvas[INDEX].rgbt[CURSOR.c]
+#define CELL        canvas[INDEX].rgbt[CURSOR.c]
 #endif
 #define CODE        state->code[state->ip]
 
 
 #define CASE(c,stmt) case c : if(!PARSE){stmt; return 1;}
 
-#define JUMP_SYM 254
-#define MOVE_SYM 255
+#define JUMP_SYM -1
+#define MOVE_SYM -2
 
 #define COMMENT          ';'        
 #define JUMP        CASE(JUMP_SYM ,   state->ip = CODE.arg;) //skip is used by optimization pass to prevent reallocing array              
@@ -205,9 +132,9 @@ int canvas_len;
 #define ROT_CCW     CASE('\\',   rot_ccw()     )        
 #define PUSH_CUR    CASE('{' ,   if(++state->sp > CURSOR_DEPTH) EXIT("Cursor Stack Overflow",0)      )        
 #define POP_CUR     CASE('}' ,   if(--state->sp < 0) EXIT("Cursor Stack Underflow",0)     )        
-#define SET_CUR     CASE('=' ,   CURSOR = cursors[state->sp]     )        
+#define SET_CUR     CASE('=' ,        )        
 #define DRAW        CASE('#' ,   draw()    )        
-#define CLEAR       CASE('@' ,   memset(canvas, 0, sizeof(Cell) * canvas_len)       )               
+#define CLEAR       CASE('@' ,   memset(canvas, 0, sizeof(int32) * canvas_len)       )               
 #define SET_R       CASE('r' ,   CURSOR.c = R   )          
 #define SET_G       CASE('g' ,   CURSOR.c = G   )          
 #define SET_B       CASE('b' ,   CURSOR.c = B   )          
@@ -226,12 +153,91 @@ int canvas_len;
             SET_R       SET_G       SET_B       SET_T   
 #endif
 
+//todo, 
+#if OPENGL
+    #include "gfx.h"
+
+    #define  OPENGL_INIT            gl_init(state->width, state->height);\
+                                    shader_init();\
+                                    glUseProgram(m_program);\
+                                    vao_init();\
+                                    load_texture((byte*)&canvas[0], state->width, state->height);
+
+    #define  OPENGL_DESTROY         vao_destroy(); \
+                                    shader_destroy();\
+                                    gl_destroy();                   
+    
+    #define  OPENGL_RENDER          gl_update();\
+                                    gl_clear(); \
+                                    update_texture((byte*)&canvas[0], 0,0, state->width, state->height);\
+                                    vao_render();
+
+ //gl_update(); load_texture(&canvas[0].rgbt[0], state->width,state->height); vao_render()
+#else
+    enum{ OPENGL_INIT, OPENGL_RENDER, OPENGL_DESTROY};
+#endif 
+
+
+
 
 #define new(type, ptr, len)      \
 {    int sz = sizeof(type) * len;\
     ptr = (type*)malloc(sz);     \
     if(ptr)memset(ptr, 0, sz);else{EXIT("");}   \
 }                                
+
+
+//////////////////////// Structures /////////////////////////////////////////
+enum{R=0, G=1, B=2, T=3};
+
+
+typedef char    byte;
+typedef int32_t          int32;
+
+typedef struct
+{
+    byte sym;
+    //if [ or ], jump is index to the matching brace
+    int arg;
+}Code;
+
+typedef union{
+    int32 data;
+    byte rgbt[4];
+
+}Cell;
+
+typedef struct 
+{
+    int    x, y;
+    int    minX,minY,maxX,maxY;
+    int    c;    //current channel
+    int    dx,dy;    //movement dir (1,0),(0,1),(-1,0),(0,-1)
+}Cursor;
+Cursor cursors[CURSOR_DEPTH];
+
+
+typedef  struct 
+{
+    FILE    *   file;    //defaults stdin
+    Code    *   code;       //op code
+    int sp;  //cursor stack ptr
+    int  ip;  //instruction ptr, 
+
+
+    //set all below with args flags
+    int code_len;
+    int bracket_depth;
+    int width, height;
+    //eg -ppm exports to ppm by |'ing to flags register
+    byte flags;
+}State;
+State *   state;
+
+Cell  *    canvas;
+int         canvas_len; //state->width * state->height
+
+
 void move(int amt)
 {
     CURSOR.x += CURSOR.dx*amt;
@@ -247,6 +253,7 @@ void move(int amt)
     if (CURSOR.x >= state->width || CURSOR.y >= state->height || CURSOR.x < 0 || CURSOR.y < 0)
         EXIT("\nCursor Out of bounds: canvas size (%d, %d): Cursor at pos (%d, %d)\n", state->width, state->height, CURSOR.x, CURSOR.y);
 }
+
 
 void move_cell()
 {
@@ -471,13 +478,12 @@ int main(int argc, char ** argv)
     //-f value
     //file
     state = (State*)malloc(sizeof(State));
-
-    state->file = stdin;
+    state->file     = stdin;
     state->code_len = CODE_LENGTH;
-    state->width = WIDTH;
-    state->height = HEIGHT;
-    state->flags = FLAGS;
-    state->sp = 0;
+    state->width    = WIDTH;
+    state->height   = HEIGHT;
+    state->flags    = FLAGS;
+    state->sp       = 0;
     new(Code, state->code, state->code_len);
     CURSOR.c = 0;
     CURSOR.y  = HEIGHT-1;
@@ -485,6 +491,7 @@ int main(int argc, char ** argv)
     CURSOR.dx = 1; 
 
     canvas_len = state->width*state->height;
+    new(Cell, canvas, canvas_len);
 
 //    int i;
 /*
@@ -494,7 +501,6 @@ int main(int argc, char ** argv)
 */  
 
     //init new canvas
-    new(Cell, canvas, canvas_len);
 
 
        
@@ -506,11 +512,7 @@ int main(int argc, char ** argv)
     {
         optimize();
 
-        while   (   status 
-#if OPENGL
-            && gl_update()
-#endif
-                )
+        while   ( status)
         {
             status = eval();
             ++state->ip;
