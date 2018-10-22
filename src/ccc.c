@@ -131,7 +131,7 @@ Forward is +x, Backward is -x
 #define BACKWARD    CASE('<' ,   move(-1*CODE.arg)     )        
 #define ROT_CW      CASE('/' ,   rot_cw()    )        
 #define ROT_CCW     CASE('\\',   rot_ccw()     )        
-#define PUSH_CUR    CASE('{' ,   cursors[state->sp+1] = cursors[state->sp++];CHECK_CURSOR_STACK)
+#define PUSH_CUR    CASE('{' ,   memcpy(&cursors[state->sp+1],&cursors[state->sp],sizeof(Cursor));state->sp++;;CHECK_CURSOR_STACK)
 #define POP_CUR     CASE('}' ,      state->sp--;CHECK_CURSOR_STACK       )      
 #define DRAW        CASE('#' ,   draw()    )        
 #define CLEAR       CASE('@' ,   memset(canvas, 0, sizeof(int32) * canvas_len)       )               
