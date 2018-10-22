@@ -27,8 +27,7 @@ Create A ahigh Level Macro Language (introduce variables)?
 /    |    Rotate 90 degrees CW
 \    |    Rotate 90 degrees CCW
 {    |    Push cursor
-}    |    Pop cursor
-=    |    Set cursor to top stack
+}    |    cursor set to top, Pops cursor, 
 #    |    Write current canvas to output target
 @    |    Clear canvas
 x    |    set current cell to x 
@@ -53,7 +52,7 @@ cccc
 //for opengl texture set stride to be sizeof(cell) and only read 3 rgb afor textture imagae data
 //also, trying only loading texture once, se if modifying buffer will update on GPU
 //USE PIXEL BUFFER!!
-
+Remove exits messages
 
 # Initial Conditions
 Starts at (0,0).
@@ -114,6 +113,8 @@ Forward is +x, Backward is -x
 
 #define CASE(c,stmt) case c : if(!PARSE){stmt; return 1;}
 
+#define CHECK_CURSOR_STACK  if(state->sp > CURSOR_DEPTH) EXIT("Cursor Stack Overflow")   \
+                            else if(state->sp < 0) EXIT("Cursor Stack Underflow")       
 #define JUMP_SYM -1
 #define MOVE_SYM -2
 
@@ -130,9 +131,8 @@ Forward is +x, Backward is -x
 #define BACKWARD    CASE('<' ,   move(-1*CODE.arg)     )        
 #define ROT_CW      CASE('/' ,   rot_cw()    )        
 #define ROT_CCW     CASE('\\',   rot_ccw()     )        
-#define PUSH_CUR    CASE('{' ,   if(++state->sp > CURSOR_DEPTH) EXIT("Cursor Stack Overflow",0)      )        
-#define POP_CUR     CASE('}' ,   if(--state->sp < 0) EXIT("Cursor Stack Underflow",0)     )        
-#define SET_CUR     CASE('=' ,        )        
+#define PUSH_CUR    CASE('{' ,   cursors[state->sp+1] = cursors[state->sp++];CHECK_CURSOR_STACK)
+#define POP_CUR     CASE('}' ,      state->sp--;CHECK_CURSOR_STACK       )      
 #define DRAW        CASE('#' ,   draw()    )        
 #define CLEAR       CASE('@' ,   memset(canvas, 0, sizeof(int32) * canvas_len)       )               
 #define SET_R       CASE('r' ,   CURSOR.c = R   )          
@@ -183,7 +183,7 @@ Forward is +x, Backward is -x
 #define new(type, ptr, len)      \
 {    int sz = sizeof(type) * len;\
     ptr = (type*)malloc(sz);     \
-    if(ptr)memset(ptr, 0, sz);else{EXIT("");}   \
+    if(ptr)memset(ptr, 0, sz);else{EXIT(" ");}   \
 }                                
 
 
@@ -523,7 +523,7 @@ int main(int argc, char ** argv)
         }
     }
     //calls destroy and exits
-    EXIT("");
+    EXIT(".");
 
 }
 

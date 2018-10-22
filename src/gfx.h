@@ -16,6 +16,29 @@ static float verts[12] = {
     1.0, 1.0,
 };
 
+int checkError(int  shader, int  flag, int isProgram)//////////////////remove eventually
+{
+    int status = 0;
+    isProgram ?
+        glGetProgramiv(shader, flag, &status)
+        : glGetShaderiv(shader, flag, &status);
+    if (status == GL_FALSE)
+    {
+        int errorLen = 0;
+        isProgram ?
+            glGetProgramiv(shader, GL_INFO_LOG_LENGTH, &errorLen)
+            : glGetShaderiv(shader, GL_INFO_LOG_LENGTH, &errorLen);
+        char* errorMsg = (char*)malloc(errorLen);
+        isProgram ?
+            glGetProgramInfoLog(shader, errorLen, &errorLen, errorMsg)
+            : glGetShaderInfoLog(shader, errorLen, &errorLen, errorMsg);
+        printf("Shader Log: %d %s \n", errorLen, errorMsg);
+        free( errorMsg);
+        return 0;
+    }
+    return 1;
+}
+
 //grab canvas data as 2d texture
 
 void gl_init(int width, int height)
@@ -115,28 +138,7 @@ void shader_init()
 
 }
 
-int checkError(int  shader, int  flag, int isProgram)//////////////////remove eventually
-{
-    int status = 0;
-    isProgram ?
-        glGetProgramiv(shader, flag, &status)
-        : glGetShaderiv(shader, flag, &status);
-    if (status == GL_FALSE)
-    {
-        int errorLen = 0;
-        isProgram ?
-            glGetProgramiv(shader, GL_INFO_LOG_LENGTH, &errorLen)
-            : glGetShaderiv(shader, GL_INFO_LOG_LENGTH, &errorLen);
-        char* errorMsg = (char*)malloc(errorLen);
-        isProgram ?
-            glGetProgramInfoLog(shader, errorLen, &errorLen, errorMsg)
-            : glGetShaderInfoLog(shader, errorLen, &errorLen, errorMsg);
-        printf("Shader Log: %d %s \n", errorLen, errorMsg);
-        free( errorMsg);
-        return 0;
-    }
-    return 1;
-}
+
 
 void shader_destroy()
 {
