@@ -40,8 +40,8 @@ The remaining 3 grids define the RGB image channels. This is referred to as the 
 	)   set cursor to top and pop stack         
 	#   render the canvas                                    
 	@   clear the canvas                                     
-	}   )          
-	{   CURSOR.c-=CODE.arg; CHECK_CHANNEL  
+	}   move to next channel (in RGB order)                
+	{   move to previous channel 
 
 # Build
 
@@ -56,12 +56,12 @@ Implementation contains an optional Brainfuck Interpreter, which omits all non-b
 	make bf 
 
 # Usage
-
-	Reads all input from stdin
+	Reads all  instruction input from stdin
 
 ###	Example OpenGL program
 
 	cat examples/scanline.c4 | ./cccc 
 
-# Demo
-(docs/red_scanline.gif)
+####  Example Output
+
+![Alt Text](docs/red_scanline_fade.gif)
