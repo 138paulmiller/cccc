@@ -1,0 +1,30 @@
+
+/
+load 256 into cell (row iterator value)
+>
+		16               X 16
++++++++++++++++[-<++++++++++++++++>]<
+
+start for each row loop
+[
+	push cursor pos
+	(
+	\>
+		load 256 into cell (column iterator)
+		>
+		16               X 16
+		+++++++++++++++[-<++++++++++++++++>]<
+		start for each column loop
+		[
+			. push cell to channel R
+			}. push cell to channel G
+			[>+<-]>
+
+		-]
+		# display row
+				
+	) pop cursor pos
+	shift row iterator down a row and decrement
+	[>+<-]>- 
+
+]

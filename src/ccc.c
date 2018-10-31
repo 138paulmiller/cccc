@@ -1,69 +1,5 @@
-/*
-# ccc.c
-Canvas, cursor, cells in C, cool?
-Mix of Brainfuck and Turtle Graphics.
-
-TODO
-remove need for values?? treat as height x width x 3 matrix?
-Spits out PPM IMage or ASCII or OpenGL context see usage.
-Create A ahigh Level Macro Language (introduce variables)?
-
-## Canvas  :  2D grid representation of display.
-## Cell    :  Grid is composed of 4d vector defined as cells, (r,g,b,t).
-                    - r,g,b represent the pixel [0-255],
-                    - t is a “temp” pixel [0-255]. NOT used as an alpha component, just a temp register
-
-## Cursor  :  Current cell being operated on, acts as tape head.
-
-## Codes
-.    |    write value as char to screen
-,    |    Get users input from stdin (integer value)
->    |    Move forward
-<    |    Move backward
-+    |    increment current cell
--    |    decrement current cell
-[    |    Start loop body, if v is not will continue operations,
-]    |    Jumps back to matched opening brace if v is not 0
-/    |    Rotate 90 degrees CW
-\    |    Rotate 90 degrees CCW
-{    |    Push cursor
-}    |    cursor set to top, Pops cursor, 
-#    |    Write current canvas to output target
-@    |    Clear canvas
-x    |    set current cell to x 
-y    |    set current cell to y 
-r    |    switch to r channel
-g    |    switch to g channel
-b    |    switch to b channel
-t    |    switch to t channel
-//ADd functionality to read into current cell the width and height of canvas??
-
-//IDEAS
-
-//Need?
-Turn around (swap forward and backward) use // or \\
-
-
-push digits to v? | (add integer codes)
-wrap or no wrap for handling out of bounds???
-
-# Usage TODO
-cccc
-//for opengl texture set stride to be sizeof(cell) and only read 3 rgb afor textture imagae data
-//also, trying only loading texture once, se if modifying buffer will update on GPU
-//USE PIXEL BUFFER!!
-Remove exits messages
-
-# Initial Conditions
-Starts at (0,0).
-Forward is +x, Backward is -x
-
-*/
-//Implementation of BF to prove turing completeness by showing BF is subset of LAng, should be obvious though
-//BF uses only values tape
-
-//Modify Mandlebrot to draw PPM
-
+//ccc.c
+//github.com/138paulmiller
 #include <stdio.h>
 #include <stdint.h>
 #include <stdlib.h>
@@ -71,12 +7,14 @@ Forward is +x, Backward is -x
 
 //Enable runtime configuration, use FLAGS for the openg/bf
 //SEE MAKEFILE
-//#define BF           0
-//#define DEBUG        1
-//#define OPENGL       1    /*set to 0 by default to prevent opengl build. remove*/
+//#define BF        0
+//#define OPENGL    1    /*set to 0 by default to prevent opengl build. remove*/
+//#define DEBUG       0
+ #define OPTIMIZE   1
 
 #define TEST_OPENGL 0
 
+#define WRAP_MEMORY 0 //wrap memory index boundaries
 //265*265 = 65536
 #define WIDTH           256
 #define HEIGHT          256
@@ -90,58 +28,76 @@ Forward is +x, Backward is -x
 #define DRAW_OPENGL      0x02    /*0000 0010*/
 
 
+//2D grid - push pixel to ither rgb or a channel
 
-
-#define EXIT(...) {printf(__VA_ARGS__); OPENGL_DESTROY;    free(canvas);     free(state->code);free(state); exit(0);}
-
+#define EXIT(...) { printf(__VA_ARGS__); \
+                    OPENGL_DESTROY;\
+                    free(canvas);  \
+                    free(memory); \
+                    free(state->code);\
+                    free(state); \
+                    exit(0);\
+                    }
+//DOUBLE BUFFER! Splits redraw to pushpixels and clear canvas commands. pushpixels to canvas!!!!
 
 
 //#ANSII COLORS
 #define FLAG(flag) (state->flags & (flag))
 
-#define CURSOR cursors[state->sp]
-
-#define INDEX       state->height*CURSOR.y + CURSOR.x
-
-#if BF
-#define CELL        canvas[INDEX].data
-#else
-#define CELL        canvas[INDEX].rgbt[CURSOR.c]
-#endif
+#define INDEX       state->height*CURSOR.y+CURSOR.x      
+#define CELL        memory[INDEX]
+#define PIXEL       canvas[INDEX].rgb[ CURSOR.c]
 #define CODE        state->code[state->ip]
+#define CURSOR      cursors[state->sp]
+
+#define PRINT_CURSOR(c) printf("(%d %d) d(%d %d)\n", c.x, c.y, c.dx, c.dy);
 
 
 #define CASE(c,stmt) case c : if(!PARSE){stmt; return 1;}
 
+#define PUSH_CUR_STACK  memcpy(&cursors[state->sp+1],&cursors[state->sp],sizeof(Cursor));\
+                        state->sp++;
+
+
 #define CHECK_CURSOR_STACK  if(state->sp > CURSOR_DEPTH) EXIT("Cursor Stack Overflow")   \
                             else if(state->sp < 0) EXIT("Cursor Stack Underflow")       
-#define JUMP_SYM -1
-#define MOVE_SYM -2
 
+
+#define CHECK_CHANNEL    if(state->sp > 3) EXIT("Channel Overflow")   \
+                            else if(state->sp < 0) EXIT("Channel Underflow")       
+
+#define CLEAR_CANVAS memset(canvas,0,sizeof(byte)*3*memory_len)
+
+//Optimized instructions
+//Many instructions are collaped into a single instruction and a jump
+#define JUMP_SYM 255-0
+#define MOVE_SYM 255-1
+#define ZERO_SYM 255-2
+
+
+//up to 255
 #define COMMENT          ';'        
-#define JUMP        CASE(JUMP_SYM ,   state->ip = CODE.arg;) //skip is used by optimization pass to prevent reallocing array              
-#define MOVE        CASE(MOVE_SYM  ,  move_cell()                             ) //skip is used by optimization pass to prevent reallocing array              
-#define INPUT       CASE(',' ,   CELL = fgetc(stdin);                   )        
-#define OUTPUT      CASE('.' ,   putchar(CELL)                          )        
-#define INC         CASE('+' ,   CELL+=CODE.arg;                        )        
-#define DEC         CASE('-' ,   CELL-=CODE.arg                       )        
-#define BEG_LOOP    CASE('[' ,   if(!CELL)state->ip = CODE.arg)        
-#define END_LOOP    CASE(']' ,   if(CELL)state->ip = CODE.arg )        
-#define FORWARD     CASE('>' ,   move(CODE.arg)           )        
-#define BACKWARD    CASE('<' ,   move(-1*CODE.arg)     )        
-#define ROT_CW      CASE('/' ,   rot_cw()    )        
-#define ROT_CCW     CASE('\\',   rot_ccw()     )        
-#define PUSH_CUR    CASE('{' ,   memcpy(&cursors[state->sp+1],&cursors[state->sp],sizeof(Cursor));state->sp++;;CHECK_CURSOR_STACK)
-#define POP_CUR     CASE('}' ,      state->sp--;CHECK_CURSOR_STACK       )      
-#define DRAW        CASE('#' ,   draw()    )        
-#define CLEAR       CASE('@' ,   memset(canvas, 0, sizeof(int32) * canvas_len)       )               
-#define SET_R       CASE('r' ,   CURSOR.c = R   )          
-#define SET_G       CASE('g' ,   CURSOR.c = G   )          
-#define SET_B       CASE('b' ,   CURSOR.c = B   )          
-#define SET_T       CASE('t' ,   CURSOR.c = T   )          
-
+#define JUMP            CASE(JUMP_SYM ,  state->ip = CODE.arg              ) //skip is used by optimization pass to prevent reallocing array              
+#define MOVE            CASE(MOVE_SYM ,  move_cell()                       ) //skip is used by optimization pass to prevent reallocing array              
+#define ZERO_OUT        CASE(ZERO_SYM ,  CELL=0                            ) //skip is used by optimization pass to prevent reallocing array              
+#define INPUT           CASE(','      ,  CELL = fgetc(stdin)               )        
+#define OUTPUT          CASE('.'      ,  output()                          ) //push pixel if BF        
+#define INC             CASE('+'      ,  CELL+=CODE.arg                    )        
+#define DEC             CASE('-'      ,  CELL-=CODE.arg                    )        
+#define BEG_LOOP        CASE('['      ,  if(!CELL)state->ip = CODE.arg     )        
+#define END_LOOP        CASE(']'      ,  if(CELL)state->ip = CODE.arg      )        
+#define FORWARD         CASE('>'      ,  move(CODE.arg)                    )        
+#define BACKWARD        CASE('<'      ,  move(-1*CODE.arg )                )        
+#define ROT_CW          CASE('/'      ,  rot_cw()                          )        
+#define ROT_CCW         CASE('\\'     ,  rot_ccw()                         )        
+#define PUSH_CUR        CASE('('      ,  PUSH_CUR_STACK CHECK_CURSOR_STACK )
+#define POP_CUR         CASE(')'      ,  state->sp--; CHECK_CURSOR_STACK    )      
+#define DRAW            CASE('#'      ,  draw()                            )        
+#define CLEAR           CASE('@'      ,  CLEAR_CANVAS                      )               
+#define CHANNEL_NEXT    CASE('}'      ,  CURSOR.c+=CODE.arg; CHECK_CHANNEL )          
+#define CHANNEL_PREV    CASE('{'      ,  CURSOR.c-=CODE.arg; CHECK_CHANNEL ) 
 //USE SYMS FOR CAHNNELS to allow comments!!!!!
-#define OPT_CODES JUMP MOVE
+#define OPT_CODES JUMP MOVE ZERO_OUT
 #define BF_CODES INPUT OUTPUT INC DEC BEG_LOOP END_LOOP FORWARD BACKWARD OPT_CODES
 #if BF
     #define CASES   BF_CODES 
@@ -150,7 +106,7 @@ Forward is +x, Backward is -x
             ROT_CW      ROT_CCW                         \
             DRAW        CLEAR                           \
             PUSH_CUR    POP_CUR                         \
-            SET_R       SET_G       SET_B       SET_T   
+            CHANNEL_NEXT       CHANNEL_PREV   
 #endif
 
 //todo, 
@@ -191,8 +147,10 @@ Forward is +x, Backward is -x
 enum{R=0, G=1, B=2, T=3};
 
 
-typedef char    byte;
-typedef int32_t          int32;
+typedef uint32_t  uint32;
+typedef int32_t  int32;
+typedef unsigned char     byte;
+typedef uint32_t     cell;
 
 typedef struct
 {
@@ -201,18 +159,12 @@ typedef struct
     int arg;
 }Code;
 
-typedef union{
-    int32 data;
-    byte rgbt[4];
-
-}Cell;
 
 typedef struct 
 {
-    int    x, y;
-    int    minX,minY,maxX,maxY;
-    int    c;    //current channel
-    int    dx,dy;    //movement dir (1,0),(0,1),(-1,0),(0,-1)
+    uint32    x, y;
+    uint32   c;    //current channel
+    byte    dx,dy;    //movement dir (1,0),(0,1),(-1,0),(0,-1)
 }Cursor;
 Cursor cursors[CURSOR_DEPTH];
 
@@ -234,34 +186,54 @@ typedef  struct
 }State;
 State *   state;
 
-Cell  *    canvas;
-int         canvas_len; //state->width * state->height
 
+struct
+{
+    byte rgb[3]; 
+}   *    canvas;
+
+
+cell  *    memory;
+int         memory_len; //state->width * state->height
+int    minX,minY,maxX,maxY;
+
+
+void output()
+{
+#if BF
+    putchar(CELL);
+#else
+//write pixel to texture 
+    PIXEL = CELL;
+#endif
+
+}
 
 void move(int amt)
 {
     CURSOR.x += CURSOR.dx*amt;
 #if BF
-    if (CURSOR.x >= state->width)
-    {
-        CURSOR.x = CURSOR.x-state->width;   
-        CURSOR.y++;
-    } 
-#else
-    CURSOR.y -= CURSOR.dy*amt;
-#endif
+    if (CURSOR.x >= memory_len || CURSOR.x < 0)
+        EXIT("\nCursor Out of bounds: canvas len %d: Cursor at pos %d\n", memory_len, CURSOR.x);
+#else 
+    CURSOR.y += CURSOR.dy*amt;
     if (CURSOR.x >= state->width || CURSOR.y >= state->height || CURSOR.x < 0 || CURSOR.y < 0)
         EXIT("\nCursor Out of bounds: canvas size (%d, %d): Cursor at pos (%d, %d)\n", state->width, state->height, CURSOR.x, CURSOR.y);
+#endif
+#if WRAP_MEMORY
+    if (CURSOR.x >= state->width)
+        CURSOR.x%=state->width;
+    if (CURSOR.y >= state->height)
+        CURSOR.y%=state->height;
+
+#else 
+#endif
 }
 
 
 void move_cell()
 {
-#if BF 
-    int32
-#else 
-    byte
-#endif
+    cell
     * a = &CELL;
     move(1);
     CELL = *a;
@@ -304,10 +276,12 @@ void draw()
 {
     //FIX LOGIC to only update texture region
 
-    CURSOR.minX = CURSOR.x;
-    CURSOR.minY = CURSOR.y;
-    CURSOR.maxX = CURSOR.x;
-    CURSOR.maxY = CURSOR.y;
+    if(CURSOR.x < minX) minX = CURSOR.x;
+    else 
+    if(CURSOR.x > maxX) maxX = CURSOR.x;
+    if(CURSOR.y < minY) minY = CURSOR.y;
+    else 
+    if(CURSOR.y > maxY) maxY = CURSOR.y;
 
     int i;
     if (FLAG(DRAW_PPM))
@@ -315,7 +289,7 @@ void draw()
         FILE *file;
         file = fopen("out.ppm", "wb"); 
         fprintf(file, "P6\n%d %d\n255\n", state->width, state->height);
-        for (i = 0; i < canvas_len; ++i)
+        for (i = 0; i < memory_len; ++i)
             fwrite(&canvas[i], 1, 3, file);
 
         fclose(file);
@@ -370,7 +344,7 @@ byte parse()
             };
             //eat same symbol, increment arg
             //do for push, rots as well
-            INC DEC FORWARD BACKWARD
+            INC DEC FORWARD BACKWARD CHANNEL_NEXT CHANNEL_PREV
             {       
                do code->arg++;while(sym == (c=fgetc(state->file)));
                     //increment while same sym!, handle newline!!
@@ -407,50 +381,55 @@ byte parse()
 //Ad-hoc semantic_analysis
 //nano optimization passes
 #define NEXT_SYM  (code = &state->code[++ip])->sym
-
+//ip index of symbol to jummp from. jumps to "this" ip 
+#define SET_JUMP(new_sym, ip_off)   code->sym = new_sym; (code=&state->code[ip-ip_off])->sym = JUMP_SYM;code->arg= ip-1;
+#define switch_sym  switch(NEXT_SYM) 
 void optimize()
 {
     //MOVE Optimize
     //translates all instance of [>+<-] pattern to tape[c] = tape[c+1];tape[c] =0
     //adds a skip  operand tothat will skip following 6 codes 
-    
+    //add one for zeroing out [-] as well as copy
     int ip = 0;
     Code * code;
     do{
-        switch(NEXT_SYM)
+        switch_sym
         {
-            case '[':
-                
-                switch(NEXT_SYM)
+            case '[':   
+                switch_sym
                 {
                     case '>':
-                        switch(NEXT_SYM)
+                        switch_sym
                         {
 
                             case '+':
-                                switch(NEXT_SYM)
+                                switch_sym
                                 {
 
                                     case '<':
-                                    switch(NEXT_SYM)
+                                    switch_sym
                                     {
 
                                         case '-':
-                                         switch(NEXT_SYM)
+                                         switch_sym
                                             {
 
                                                 case ']':
-                                                code->sym = MOVE_SYM;
-                                                (code=&state->code[ip-5])->sym = JUMP_SYM;
-                                                code->arg= ip-1;
+                                                SET_JUMP(MOVE_SYM,5) //[>+<-] == 5 syms
+                                                break; //?optional break for now; end case ]
+                                            }break;//end case -
+                                    }break;//end case <
 
-                                            }break;
-                                    }break;
+                                }break; //end case +
 
-                                }break;
-
+                        }break; //end case >
+                    case '-':
+                        switch_sym{
+                            case ']':   //case [-] == zsero out
+                            SET_JUMP(ZERO_SYM, 2)
+                            break;
                         }break;
-                }break;
+                }break; //end case [
 
 
         }
@@ -463,7 +442,9 @@ void optimize()
 byte eval()
 {
 
-    switch (CODE.sym){
+    //printf("\nCODE: %c | CELL:%d", CODE.sym, CELL);
+    switch (CODE.sym)
+    {
         CASES
     }
     return 0; //done NOOP
@@ -486,12 +467,20 @@ int main(int argc, char ** argv)
     state->sp       = 0;
     new(Code, state->code, state->code_len);
     CURSOR.c = 0;
-    CURSOR.y  = HEIGHT-1;
+    CURSOR.y  = 
+    0
+;
     CURSOR.x  = CURSOR.dy = CURSOR.c =0;
     CURSOR.dx = 1; 
+    minX = state->width;
+    minY = state->height; 
+    maxX = -1;
+    maxY = -1; 
 
-    canvas_len = state->width*state->height;
-    new(Cell, canvas, canvas_len);
+    memory_len = state->width*state->height;
+    new(byte, canvas, 3*memory_len);
+    
+    new(cell, memory, memory_len);
 
 //    int i;
 /*
@@ -510,8 +499,9 @@ int main(int argc, char ** argv)
 
     if (parse())
     {
+        #if OPTIMIZE
         optimize();
-
+        #endif
         while   ( status)
         {
             status = eval();
@@ -523,7 +513,7 @@ int main(int argc, char ** argv)
         }
     }
     //calls destroy and exits
-    EXIT(".");
+    EXIT(" ");
 
 }
 
@@ -534,11 +524,12 @@ int main(int argc, char ** argv)
 //show local memory for values
 void debug_values()
 {
-    
-    printf("\n-----------------CURRENT STATE-------------------");
+ //if(-1==getchar())return;   
 
-    int tab = 10, htab = 5;
-    static byte * rgb;
+    //printf("\n-----------------CURRENT STATE-------------------\n");
+    if(-1==getchar())return;
+    int tab = 5, htab = tab/2;
+/*
     puts("Cursor");
     printf("\tx  : %d\n", CURSOR.x);
     printf("\ty  : %d\n", CURSOR.y);
@@ -548,7 +539,11 @@ void debug_values()
     printf("\nARG\t:%d ", CODE.arg);
     printf("\nPC\t%d\n", state->ip);
     printf("\nCHANNEL\t%d\n", CURSOR.c);
+*/
 
+    printf("\n %c:%d", CODE.sym,  CODE.arg);    
+    printf("\t(%2d %2d)\n", CURSOR.x, CURSOR.y);
+    
     int i=0, j, x, y;
     int cx = CURSOR.x, cy = CURSOR.y;
     x = CURSOR.x - htab;
@@ -577,8 +572,8 @@ void debug_values()
         while (i <  tab)
         {
             CURSOR.x=x+i;
-            rgb = &canvas[INDEX].rgbt[0];
-            printf("|% 3d|", rgb[CURSOR.c]);
+
+            printf("|% 3d|", CELL);
             i++;
         }
         j++;
@@ -587,6 +582,7 @@ void debug_values()
 
     CURSOR.x=cx; CURSOR.y = cy;
     //getchar();
+    usleep(2);
 }
 #endif 
 

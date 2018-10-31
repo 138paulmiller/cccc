@@ -1,3 +1,7 @@
 # Optimize BF math
-# Change channel switching sematics syntax to allow for inline comments
-# Push pixel rather that use 
+
+## FIX
+ZERO OUT
+Channel switching!
+
+# Optimize using SubTex2D , create bounding box of subtexture to update

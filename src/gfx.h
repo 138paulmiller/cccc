@@ -109,6 +109,7 @@ void shader_init()
     "out vec2 uv;"
     "void main(){"
         "uv=pos*0.5+0.5;"
+        "uv.y=1-uv.y;"
         "gl_Position  =vec4(pos,1,1);\n"
 
     "}";
@@ -121,7 +122,6 @@ void shader_init()
     "out vec4 color;"
     "void main(){\n"
         "color = texture(sampler,uv);\n"
-//        "color = vec4(uv,0,1);\n"
     "}";
 
     m_program = glCreateProgram();
@@ -189,13 +189,13 @@ void load_texture(GLubyte * data, int w, int h)
 { 
     glBindTexture(GL_TEXTURE_2D, m_texture);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER,   GL_LINEAR);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, (void*)data);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, w, h, 0, GL_RGB, GL_UNSIGNED_BYTE, (void*)data);
 
 }
 
 void update_texture(GLubyte * data, int xoff, int yoff, int w, int h)
 {
-    glTexSubImage2D( GL_TEXTURE_2D, 0,xoff,yoff,w,h,GL_RGBA,GL_UNSIGNED_BYTE,data);
+    glTexSubImage2D( GL_TEXTURE_2D, 0,xoff,yoff,w,h,GL_RGB,GL_UNSIGNED_BYTE,data);
 }
 
 
