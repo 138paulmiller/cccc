@@ -44,9 +44,9 @@
 //#ANSII COLORS
 #define FLAG(flag) (state->flags & (flag))
 
-#define INDEX       state->height*CURSOR.y+CURSOR.x      
+#define INDEX       (state->width*CURSOR.y)+CURSOR.x      
 #define CELL        memory[INDEX]
-#define PIXEL       canvas[INDEX].rgb[ CURSOR.c]
+#define PIXEL       canvas[(INDEX)*3+CURSOR.c]
 #define CODE        state->code[state->ip]
 #define CURSOR      cursors[state->sp]
 
@@ -63,8 +63,8 @@
                             else if(state->sp < 0) EXIT("Cursor Stack Underflow")       
 
 
-#define CHECK_CHANNEL    if(state->sp > 3) EXIT("Channel Overflow")   \
-                            else if(state->sp < 0) EXIT("Channel Underflow")       
+#define CHECK_CHANNEL    if(CURSOR.c > 3) EXIT("Channel Overflow")   \
+                            else if(CURSOR.c < 0) EXIT("Channel Underflow")       
 
 #define CLEAR_CANVAS memset(canvas,0,sizeof(byte)*3*memory_len)
 
@@ -94,8 +94,8 @@
 #define POP_CUR         CASE(')'      ,  state->sp--; CHECK_CURSOR_STACK    )      
 #define DRAW            CASE('#'      ,  draw()                            )        
 #define CLEAR           CASE('@'      ,  CLEAR_CANVAS                      )               
-#define CHANNEL_NEXT    CASE('}'      ,  CURSOR.c+=CODE.arg; CHECK_CHANNEL )          
-#define CHANNEL_PREV    CASE('{'      ,  CURSOR.c-=CODE.arg; CHECK_CHANNEL ) 
+#define CHANNEL_NEXT    CASE('}'      ,  CURSOR.c+=CODE.arg;CHECK_CHANNEL )          
+#define CHANNEL_PREV    CASE('{'      ,  CURSOR.c-=CODE.arg;CHECK_CHANNEL ) 
 //USE SYMS FOR CAHNNELS to allow comments!!!!!
 #define OPT_CODES JUMP MOVE ZERO_OUT
 #define BF_CODES INPUT OUTPUT INC DEC BEG_LOOP END_LOOP FORWARD BACKWARD OPT_CODES
@@ -163,7 +163,7 @@ typedef struct
 typedef struct 
 {
     uint32    x, y;
-    uint32   c;    //current channel
+    byte   c;    //current channel
     byte    dx,dy;    //movement dir (1,0),(0,1),(-1,0),(0,-1)
 }Cursor;
 Cursor cursors[CURSOR_DEPTH];
@@ -187,10 +187,7 @@ typedef  struct
 State *   state;
 
 
-struct
-{
-    byte rgb[3]; 
-}   *    canvas;
+byte  * canvas;
 
 
 cell  *    memory;
@@ -466,11 +463,9 @@ int main(int argc, char ** argv)
     state->flags    = FLAGS;
     state->sp       = 0;
     new(Code, state->code, state->code_len);
-    CURSOR.c = 0;
-    CURSOR.y  = 
-    0
-;
-    CURSOR.x  = CURSOR.dy = CURSOR.c =0;
+    CURSOR.c    = 0;
+    CURSOR.y    =     0;
+    CURSOR.x    = CURSOR.dy = CURSOR.c =0;
     CURSOR.dx = 1; 
     minX = state->width;
     minY = state->height; 

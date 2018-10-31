@@ -16,8 +16,9 @@ start for each row loop
 		+++++++++++++++[-<++++++++++++++++>]<
 		start for each column loop
 		[
-			. push cell to channel R
-			}. push cell to channel G
+			. push cell to 	 R channel
+			}. push cell to  G channel
+			{	go back to 	 R channel
 			[>+<-]>
 
 		-]
