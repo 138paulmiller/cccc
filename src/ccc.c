@@ -95,18 +95,21 @@
 #define DRAW            CASE('#'      ,  draw()                            )        
 #define CLEAR           CASE('@'      ,  CLEAR_CANVAS                      )               
 #define CHANNEL_NEXT    CASE('}'      ,  CURSOR.c+=CODE.arg;CHECK_CHANNEL )          
-#define CHANNEL_PREV    CASE('{'      ,  CURSOR.c-=CODE.arg;CHECK_CHANNEL ) 
+#define CHANNEL_PREV    CASE('{'      ,  CURSOR.c-=CODE.arg;CHECK_CHANNEL )                
+#define SET_X           CASE('_'      ,  CURSOR.x=CELL )          
+#define SET_Y           CASE('|'      ,  CURSOR.y=CELL ) 
 //USE SYMS FOR CAHNNELS to allow comments!!!!!
 #define OPT_CODES JUMP MOVE ZERO_OUT
 #define BF_CODES INPUT OUTPUT INC DEC BEG_LOOP END_LOOP FORWARD BACKWARD OPT_CODES
 #if BF
     #define CASES   BF_CODES 
 #else
-    #define CASES BF_CODES                              \
-            ROT_CW      ROT_CCW                         \
-            DRAW        CLEAR                           \
-            PUSH_CUR    POP_CUR                         \
-            CHANNEL_NEXT       CHANNEL_PREV   
+    #define CASES BF_CODES                    \
+            ROT_CW          ROT_CCW           \
+            DRAW            CLEAR             \
+            PUSH_CUR        POP_CUR           \
+            SET_X           SET_Y             \
+            CHANNEL_NEXT    CHANNEL_PREV   
 #endif
 
 //todo, 

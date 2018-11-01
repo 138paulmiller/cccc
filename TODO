@@ -1,7 +1,7 @@
 # Optimize BF math
 
 ## FIX
-ZERO OUT
-Channel switching!
 
+Creat PPM target 
+Create seperate x,y for canvas??
 # Optimize using SubTex2D , create bounding box of subtexture to update

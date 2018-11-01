@@ -41,7 +41,9 @@ The remaining 3 grids define the RGB image channels. This is referred to as the 
 	#   render the canvas                                    
 	@   clear the canvas                                     
 	}   move to next channel (in RGB order)                
-	{   move to previous channel 
+	{   move to previous channel                             
+	_   set cursor x position to cell value                
+	|   set cursor y position to cell value 
 
 # Build
 
